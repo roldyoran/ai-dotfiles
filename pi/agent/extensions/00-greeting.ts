@@ -95,11 +95,12 @@ function levelOf(pi: ExtensionAPI): string {
   }
 }
 
-function counts(): { ext: number; skills: number } {
+function counts(): { ext: number; skills: number; prompts: number } {
   try {
     const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
     let ext = 0;
     let skills = 0;
+    let prompts = 0;
     const extDir = join(base, "extensions");
     if (existsSync(extDir)) {
       ext = readdirSync(extDir).filter((f) => f.endsWith(".ts") || f.endsWith(".js")).length;
@@ -110,9 +111,13 @@ function counts(): { ext: number; skills: number } {
         (d) => d.name !== ".gitkeep" && (d.isDirectory() || d.name.endsWith(".md")),
       ).length;
     }
-    return { ext, skills };
+    const promptsDir = join(base, "prompts");
+    if (existsSync(promptsDir)) {
+      prompts = readdirSync(promptsDir).filter((f) => f.endsWith(".md")).length;
+    }
+    return { ext, skills, prompts };
   } catch {
-    return { ext: 0, skills: 0 };
+    return { ext: 0, skills: 0, prompts: 0 };
   }
 }
 
@@ -147,7 +152,7 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
       const meta = THINKING[level] ?? { label: level, icon: "●" };
       const provider = ctx.model?.provider ?? "—";
       const modelId = ctx.model?.id ?? "sin modelo";
-      const { ext, skills } = counts();
+      const { ext, skills, prompts } = counts();
       const dir = basename(ctx.cwd) || ctx.cwd;
 
       const W = Math.max(60, Math.min(width - 2, 92));
@@ -195,7 +200,7 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
         padEndVisible(` ${head("Esfuerzo")}`, rightW),
         padEndVisible(` ${theme.fg("warning", `${level} ${meta.icon}`)} ${dim(meta.label)}`, rightW),
         padEndVisible(` ${head("Sistema")}`, rightW),
-        padEndVisible(` ${mut("ext")} ${val(`${ext}`)}  ${mut("skills")} ${val(`${skills}`)}`, rightW),
+        padEndVisible(` ${mut("ext")} ${val(`${ext}`)}  ${mut("skills")} ${val(`${skills}`)}  ${mut("prompts")} ${val(`${prompts}`)}`, rightW),
         padEndVisible(` ${dim(`v${VERSION}`)}`, rightW),
       ];
 
