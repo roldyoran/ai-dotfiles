@@ -7,7 +7,7 @@ REPO_PI="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$REPO_PI/agent"
 DST="$HOME/.pi/agent"
 
-mkdir -p "$DST/extensions" "$DST/skills"
+mkdir -p "$DST/extensions" "$DST/skills" "$DST/prompts"
 echo "◆ ai-dotfiles/pi → $DST"
 
 for f in "$SRC"/extensions/*.ts; do
@@ -20,6 +20,12 @@ for d in "$SRC"/skills/*/; do
   [ -d "$d" ] || continue
   ln -sfn "$d" "$DST/skills/$(basename "$d")"
   echo "  + link skill $(basename "$d")"
+done
+
+for f in "$SRC"/prompts/*.md; do
+  [ -e "$f" ] || continue
+  ln -sfn "$f" "$DST/prompts/$(basename "$f")"
+  echo "  + link prompt $(basename "$f")"
 done
 
 # Merge settings.base.json (python3, python o node — lo que haya)
