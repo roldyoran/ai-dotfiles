@@ -1,5 +1,5 @@
 /**
- * 00-greeting — Símbolo π en grande (degradado apagado) + saludo + tabla.
+ * 00-greeting — 2 columnas: logo π grande + info. Insta suavizado + carpeta en el borde.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -19,22 +19,25 @@ const THINKING: Record<string, { label: string; icon: string }> = {
   max: { label: "máximo", icon: "✦" },
 };
 
-// π estilo imagen: barra superior gruesa + pata izquierda corta + derecha larga.
-// 20 columnas x 8 filas. Degradado diagonal Insta suavizado por carácter.
+// π de antes: barra superior gruesa + pata izquierda corta + derecha larga.
+// (sin espacios al final: se rellenan en código para que el ancho sea parejo
+// y ningún editor los recorte al guardar).
 const PI = [
   "██████████████████████",
   "██████████████████████",
-  "     █████   █████   ",
-  "     █████   █████   ",
-  "     █████   █████   ",
-  "             █████   ",
-  "             █████   ",
-  "             █████   ",
-  "                     ",
+  "     █████   █████",
+  "     █████   █████",
+  "     █████   █████",
+  "             █████",
+  "             █████",
+  "             █████",
 ];
 
-// Gradiente Insta a media saturación: morado → magenta → rosa → rojo → naranja → amarillo.
-// Desaturado ~45% hacia gris para que se vea con vida pero sin gritar.
+// Ancho parejo para todas las filas (gradiente y centrado uniformes).
+const PIW = Math.max(...PI.map((r) => [...r].length));
+const PIN = PI.map((r) => r.padEnd(PIW, " "));
+
+// Colores de antes: Insta a media saturación (sin neón, sin gris).
 const STOPS: Array<[number, number, number]> = [
   [89, 57, 153], // morado suavizado
   [153, 76, 119], // magenta apagado
@@ -48,12 +51,11 @@ function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
 }
 
-function logoColor(x: number, y: number, w: number, h: number): [number, number, number] {
+function logoColor(x: number, y: number, w: number = PIW, h: number = PIN.length): [number, number, number] {
   // Diagonal: morado arriba-izquierda → amarillo abajo-derecha.
   const t = Math.min(1, Math.max(0, (x / Math.max(1, w - 1)) * 0.65 + (y / Math.max(1, h - 1)) * 0.35));
   const seg = t * (STOPS.length - 1);
   const i = Math.min(STOPS.length - 2, Math.floor(seg));
-  // smoothstep: evita bandas y grises en los puntos medios
   const raw = seg - i;
   const f = raw * raw * (3 - 2 * raw);
   const [r1, g1, b1] = STOPS[i];
@@ -62,20 +64,28 @@ function logoColor(x: number, y: number, w: number, h: number): [number, number,
 }
 
 const paint = (line: string, y: number): string => {
-  const h = PI.length;
   let out = "";
   let x = 0;
   for (const ch of line) {
     if (ch === " ") {
       out += " ";
     } else {
-      const [r, g, b] = logoColor(x, y, line.length, h);
+      const [r, g, b] = logoColor(x, y);
       out += `\x1b[38;2;${r};${g};${b}m${ch}\x1b[0m`;
     }
     x++;
   }
   return out;
 };
+
+// Centrado del logo por conteo de caracteres (cada █ y espacio = 1 celda).
+// No usa truncate: el logo nunca se recorta, solo se rellena.
+function centerLogo(painted: string, n: number): string {
+  if (PIW >= n) return painted;
+  const left = Math.floor((n - PIW) / 2);
+  const right = n - PIW - left;
+  return " ".repeat(left) + painted + " ".repeat(right);
+}
 
 function levelOf(pi: ExtensionAPI): string {
   try {
@@ -85,9 +95,6 @@ function levelOf(pi: ExtensionAPI): string {
   }
 }
 
-// Cuenta archivos de extensión / carpetas de skill en ~/.pi/agent.
-// Antes contábamos pi.getCommands() por source, pero eso cuenta COMANDOS
-// (00-greeting.ts solo ya registra 2: /hola + /header) y por eso salía "3".
 function counts(): { ext: number; skills: number } {
   try {
     const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
@@ -114,15 +121,20 @@ function padEndVisible(s: string, n: number): string {
   return w >= n ? s : s + " ".repeat(n - w);
 }
 
-const GREETINGS = [
-  "Hola \u{1F44B}  — listo para construir.",
-  "Buenas \u{1F6E0}\uFE0F  — ¿qué armamos hoy?",
-  "Hey \u2728  — a afinar ese código.",
-  "Saludos \u{1F680}  — vamos al grano.",
-];
+function centerCell(s: string, n: number): string {
+  const t = truncateToWidth(s, n);
+  const w = visibleWidth(t);
+  if (w >= n) return t;
+  const left = Math.floor((n - w) / 2);
+  const right = n - w - left;
+  return " ".repeat(left) + t + " ".repeat(right);
+}
+
+// 4 saludos que caben en la columna del logo.
+const LEFT_GREETINGS = ["Welcome back!", "¡Hola de nuevo!", "¡A construir!", "¡Vamos al código!"];
 
 function pickGreeting(): string {
-  return GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+  return LEFT_GREETINGS[Math.floor(Math.random() * LEFT_GREETINGS.length)];
 }
 
 function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
@@ -136,56 +148,70 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
       const provider = ctx.model?.provider ?? "—";
       const modelId = ctx.model?.id ?? "sin modelo";
       const { ext, skills } = counts();
-      const dir = basename(ctx.cwd);
+      const dir = basename(ctx.cwd) || ctx.cwd;
 
-      const W = Math.max(40, Math.min(width, 64));
+      const W = Math.max(60, Math.min(width - 2, 92));
       const inner = W - 2;
-      const colL = Math.floor((inner - 1) / 2);
-      const colR = inner - 1 - colL;
+      const leftW = 26;
+      const rightW = inner - 1 - leftW;
 
       const b = (s: string) => theme.fg("borderMuted", s);
-      const label = (s: string) => theme.fg("muted", s);
+      const head = (s: string) => theme.fg("accent", s);
+      const dim = (s: string) => theme.fg("dim", s);
       const val = (s: string) => theme.fg("text", s);
+      const mut = (s: string) => theme.fg("muted", s);
+
+      const top = b("┌") + b("─".repeat(leftW)) + b("┬") + b("─".repeat(rightW)) + b("┐");
+      const row = (left: string, right: string) => b("│") + left + b("│") + right + b("│");
+      // Divisor solo-derecha: comparte línea con una fila del logo para no cortarlo.
+      const rdiv = (left: string) => b("│") + left + b("├") + b("─".repeat(rightW)) + b("┤");
+
+      // Borde inferior con la carpeta incrustada.
+      const label = ` ${dir} `;
+      const labelW = visibleWidth(label);
+      const padL = Math.max(1, Math.floor((inner - labelW) / 2));
+      const padR = Math.max(1, inner - labelW - padL);
+      const bot = b("└") + b("─".repeat(padL)) + val(label) + b("─".repeat(padR)) + b("┘");
+
+      // Izquierda: saludo + logo + aire abajo (11 filas).
+      // Derecha: 3 secciones (Modelo / Esfuerzo / Sistema) con divisor propio.
+      const L = [
+        centerCell(val(greeting), leftW),
+        centerCell("", leftW),
+        centerLogo(paint(PIN[0], 0), leftW),
+        centerLogo(paint(PIN[1], 1), leftW),
+        centerLogo(paint(PIN[2], 2), leftW),
+        centerLogo(paint(PIN[3], 3), leftW),
+        centerLogo(paint(PIN[4], 4), leftW),
+        centerLogo(paint(PIN[5], 5), leftW),
+        centerLogo(paint(PIN[6], 6), leftW),
+        centerLogo(paint(PIN[7], 7), leftW),
+        centerCell("", leftW),
+      ];
+      const R = [
+        padEndVisible(` ${head("Modelo")}`, rightW),
+        padEndVisible(` ${val(truncateToWidth(modelId, rightW - 2))}`, rightW),
+        padEndVisible(` ${dim(truncateToWidth(provider, rightW - 2))}`, rightW),
+        padEndVisible(` ${head("Esfuerzo")}`, rightW),
+        padEndVisible(` ${theme.fg("warning", `${level} ${meta.icon}`)} ${dim(meta.label)}`, rightW),
+        padEndVisible(` ${head("Sistema")}`, rightW),
+        padEndVisible(` ${mut("ext")} ${val(`${ext}`)}  ${mut("skills")} ${val(`${skills}`)}`, rightW),
+        padEndVisible(` ${dim(`v${VERSION}`)}`, rightW),
+      ];
 
       const lines: string[] = [""];
-
-      // π en degradado apagado + versión/carpeta a la derecha
-      PI.forEach((row, i) => {
-        const suffix =
-          i === 0
-            ? theme.fg("dim", `   v${VERSION}`)
-            : i === 2
-              ? theme.fg("dim", `   ${dir}`)
-              : "";
-        lines.push(truncateToWidth(paint(row, i) + suffix, width));
-      });
-
-      lines.push(truncateToWidth(theme.fg("text", greeting), width));
-
-      const top = b("┌") + b("─".repeat(colL)) + b("┬") + b("─".repeat(colR)) + b("┐");
-      const mid = b("├") + b("─".repeat(colL)) + b("┼") + b("─".repeat(colR)) + b("┤");
-      const bot = b("└") + b("─".repeat(colL)) + b("┴") + b("─".repeat(colR)) + b("┘");
-      const row = (left: string, right: string) =>
-        b("│") + padEndVisible(left, colL) + b("│") + padEndVisible(right, colR) + b("│");
-
       lines.push(truncateToWidth(top, width));
-      lines.push(
-        truncateToWidth(b("│") + padEndVisible(label(" modelo"), colL) + b("│") + padEndVisible(label(" esfuerzo"), colR) + b("│"), width),
-      );
-      lines.push(
-        truncateToWidth(
-          row(` ${theme.fg("dim", truncateToWidth(provider, colL - 2))}`, ` ${theme.fg("warning", `${level} ${meta.icon}`)}`),
-          width,
-        ),
-      );
-      lines.push(
-        truncateToWidth(row(` ${val(truncateToWidth(modelId, colL - 2))}`, ` ${theme.fg("dim", meta.label)}`), width),
-      );
-      lines.push(truncateToWidth(mid, width));
-      lines.push(
-        truncateToWidth(b("│") + padEndVisible(label(" extensiones"), colL) + b("│") + padEndVisible(label(" skills"), colR) + b("│"), width),
-      );
-      lines.push(truncateToWidth(row(` ${val(`${ext}`)}`, ` ${val(`${skills}`)}`), width));
+      lines.push(truncateToWidth(row(L[0], R[0]), width));
+      lines.push(truncateToWidth(row(L[1], R[1]), width));
+      lines.push(truncateToWidth(row(L[2], R[2]), width));
+      lines.push(truncateToWidth(rdiv(L[3]), width));
+      lines.push(truncateToWidth(row(L[4], R[3]), width));
+      lines.push(truncateToWidth(row(L[5], R[4]), width));
+      lines.push(truncateToWidth(rdiv(L[6]), width));
+      lines.push(truncateToWidth(row(L[7], R[5]), width));
+      lines.push(truncateToWidth(row(L[8], R[6]), width));
+      lines.push(truncateToWidth(row(L[9], R[7]), width));
+      lines.push(truncateToWidth(row(L[10], padEndVisible("", rightW)), width));
       lines.push(truncateToWidth(bot, width));
 
       return lines;
