@@ -17,6 +17,7 @@ $Target = Join-Path $HOME ".pi/agent"
 function Ensure-Dir($p) { if (-not (Test-Path $p)) { New-Item -ItemType Directory -Path $p | Out-Null } }
 Ensure-Dir (Join-Path $Target "extensions")
 Ensure-Dir (Join-Path $Target "skills")
+Ensure-Dir (Join-Path $Target "prompts")
 
 function Link-Or-Copy($src, $dst) {
   if (Test-Path $dst) {
@@ -51,6 +52,14 @@ $skillsSrc = Join-Path $AgentSrc "skills"
 if (Test-Path $skillsSrc) {
   Get-ChildItem $skillsSrc -Directory | ForEach-Object {
     Link-Or-Copy $_.FullName (Join-Path (Join-Path $Target "skills") $_.Name)
+  }
+}
+
+# 2b. Prompts (*.md sueltos -> /nombre)
+$promptsSrc = Join-Path $AgentSrc "prompts"
+if (Test-Path $promptsSrc) {
+  Get-ChildItem $promptsSrc -Filter *.md -File | ForEach-Object {
+    Link-Or-Copy $_.FullName (Join-Path (Join-Path $Target "prompts") $_.Name)
   }
 }
 
