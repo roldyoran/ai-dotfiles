@@ -7,7 +7,7 @@ import { VERSION } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { basename, join } from "node:path";
 import { homedir } from "node:os";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 
 const THINKING: Record<string, { label: string; icon: string }> = {
   off: { label: "reposo", icon: "○" },
@@ -95,30 +95,112 @@ function levelOf(pi: ExtensionAPI): string {
   }
 }
 
-function counts(): { ext: number; skills: number; prompts: number } {
+function countExtFiles(dirs: string[]): number {
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    try {
+      if (!existsSync(dir)) continue;
+      for (const f of readdirSync(dir)) {
+        if (f.endsWith(".ts") || f.endsWith(".js")) seen.add(f.toLowerCase());
+      }
+    } catch { /* ignora dirs ilegibles */ }
+  }
+  return seen.size;
+}
+
+function countSkillsInDirs(dirs: string[]): number {
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    try {
+      if (!existsSync(dir)) continue;
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === ".gitkeep") continue;
+        let isDir = e.isDirectory();
+        let isMd = e.isFile() && e.name.endsWith(".md");
+        if (e.isSymbolicLink()) {
+          try {
+            const st = statSync(join(dir, e.name));
+            isDir = st.isDirectory();
+            isMd = st.isFile() && e.name.endsWith(".md");
+          } catch { continue; }
+        }
+        if (isDir || isMd) seen.add(e.name.toLowerCase());
+      }
+    } catch { /* ignora dirs ilegibles */ }
+  }
+  return seen.size;
+}
+
+function countPromptsInDirs(dirs: string[]): number {
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    try {
+      if (!existsSync(dir)) continue;
+      for (const f of readdirSync(dir)) {
+        if (f.endsWith(".md")) seen.add(f.toLowerCase());
+      }
+    } catch { /* ignora dirs ilegibles */ }
+  }
+  return seen.size;
+}
+
+// Sube desde cwd buscando <dir>/.agents/skills (como hace pi: ancestors).
+function ancestorAgentsSkillDirs(cwd: string): string[] {
+  const out: string[] = [];
+  let cur = cwd;
+  for (let i = 0; i < 12; i++) {
+    out.push(join(cur, ".agents", "skills"));
+    const parent = join(cur, "..");
+    const norm = parent === cur ? cur : join(parent);
+    // evita bucle en raíz: si ya no sube, para
+    if (norm === cur || cur === "/" || /^[A-Z]:\\?$/.test(cur)) break;
+    cur = norm;
+    // no subir más allá del home (los globales se cuentan aparte)
+    if (cur.length < homedir().length && homedir().startsWith(cur)) break;
+  }
+  return out;
+}
+
+function counts(pi: ExtensionAPI, ctx?: ExtensionContext): { ext: number; skills: number; prompts: number } {
+  // Fuente autoritativa: pi ya resolvió, mergeó y dedupó (trust + colisiones).
+  // source: "extension" | "prompt" | "skill" — es lo mismo que lista el TUI.
   try {
+    const cmds = pi.getCommands?.() ?? [];
+    if (cmds.length > 0) {
+      const skills = new Set(cmds.filter((c) => c.source === "skill").map((c) => c.name.toLowerCase()));
+      const prompts = new Set(cmds.filter((c) => c.source === "prompt").map((c) => c.name.toLowerCase()));
+      const cwd = ctx?.cwd ?? process.cwd();
+      const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+      const ext = countExtFiles([join(base, "extensions"), join(cwd, ".pi", "extensions")]);
+      // Si getCommands trae datos, úsalo aunque sea 0 (ej. proyecto sin skills es 0 real).
+      // Solo cae a fallback de FS si AMBOS están vacíos y podría ser carga temprana.
+      if (skills.size > 0 || prompts.size > 0) return { ext, skills: skills.size, prompts: prompts.size };
+      const fb = countsFromFs(cwd, base);
+      return { ext, skills: fb.skills, prompts: fb.prompts };
+    }
+  } catch { /* cae a filesystem */ }
+  try {
+    const cwd = ctx?.cwd ?? process.cwd();
     const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
-    let ext = 0;
-    let skills = 0;
-    let prompts = 0;
-    const extDir = join(base, "extensions");
-    if (existsSync(extDir)) {
-      ext = readdirSync(extDir).filter((f) => f.endsWith(".ts") || f.endsWith(".js")).length;
-    }
-    const skillsDir = join(base, "skills");
-    if (existsSync(skillsDir)) {
-      skills = readdirSync(skillsDir, { withFileTypes: true }).filter(
-        (d) => d.name !== ".gitkeep" && (d.isDirectory() || d.name.endsWith(".md")),
-      ).length;
-    }
-    const promptsDir = join(base, "prompts");
-    if (existsSync(promptsDir)) {
-      prompts = readdirSync(promptsDir).filter((f) => f.endsWith(".md")).length;
-    }
-    return { ext, skills, prompts };
+    return countsFromFs(cwd, base, ctx);
   } catch {
     return { ext: 0, skills: 0, prompts: 0 };
   }
+}
+
+// Fallback filesystem: replica las raíces que pi/package-manager usa.
+function countsFromFs(cwd: string, base: string, ctx?: ExtensionContext): { ext: number; skills: number; prompts: number } {
+  const trusted = (() => {
+    try { return ctx?.isProjectTrusted?.() ?? true; } catch { return true; }
+  })();
+  const ext = countExtFiles(trusted ? [join(base, "extensions"), join(cwd, ".pi", "extensions")] : [join(base, "extensions")]);
+  const skillDirs = trusted
+    ? [join(cwd, ".pi", "skills"), ...ancestorAgentsSkillDirs(cwd), join(base, "skills"), join(homedir(), ".agents", "skills")]
+    : [join(base, "skills"), join(homedir(), ".agents", "skills")];
+  const promptDirs = trusted
+    ? [join(cwd, ".pi", "prompts"), join(base, "prompts")]
+    : [join(base, "prompts")];
+  return { ext, skills: countSkillsInDirs(skillDirs), prompts: countPromptsInDirs(promptDirs) };
 }
 
 function padEndVisible(s: string, n: number): string {
@@ -152,7 +234,7 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
       const meta = THINKING[level] ?? { label: level, icon: "●" };
       const provider = ctx.model?.provider ?? "—";
       const modelId = ctx.model?.id ?? "sin modelo";
-      const { ext, skills, prompts } = counts();
+      const { ext, skills, prompts } = counts(pi, ctx);
       const dir = basename(ctx.cwd) || ctx.cwd;
 
       const W = Math.max(60, Math.min(width - 2, 92));
