@@ -37,14 +37,14 @@ const PI = [
 const PIW = Math.max(...PI.map((r) => [...r].length));
 const PIN = PI.map((r) => r.padEnd(PIW, " "));
 
-// Colores de antes: Insta a media saturación (sin neón, sin gris).
+// Colores de antes: Insta saturado +2 niveles (vivo, sin neón).
 const STOPS: Array<[number, number, number]> = [
-  [89, 57, 153], // morado suavizado
-  [153, 76, 119], // magenta apagado
-  [172, 75, 108], // rosa rojizo mate
-  [182, 59, 59], // rojo terroso
-  [203, 133, 98], // naranja arcilla
-  [222, 180, 122], // amarillo arena
+  [82, 36, 174], // morado vivo
+  [176, 53, 122], // magenta vivo
+  [197, 50, 100], // rosa rojizo vivo
+  [206, 35, 35], // rojo vivo
+  [224, 126, 77], // naranja arcilla vivo
+  [239, 183, 105], // amarillo arena vivo
 ];
 
 function lerp(a: number, b: number, t: number): number {
