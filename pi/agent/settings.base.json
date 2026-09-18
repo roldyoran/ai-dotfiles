@@ -1,4 +1,5 @@
 {
   "theme": "dark",
-  "enableSkillCommands": true
+  "enableSkillCommands": true,
+  "quietStartup": true
 }
