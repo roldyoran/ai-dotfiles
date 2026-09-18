@@ -228,11 +228,11 @@ dim "modo   : $([[ "$MODE" == "copy" ]] && echo "COPIA (--copy)" || echo "SYMLIN
 [[ -d "$SRC" ]] || { err "No existe la carpeta del repo: $SRC"; exit 1; }
 [[ -f "$SRC/settings.base.json" ]] || { err "Falta settings.base.json en $SRC"; exit 1; }
 
-mkdir -p "$DST/extensions" "$DST/skills" "$DST/prompts"
+mkdir -p "$DST/extensions" "$DST/skills" "$DST/prompts" "$DST/themes"
 
 if [[ $UNINSTALL -eq 1 ]]; then
   title "Desinstalando links del repo"
-  for dir in extensions skills prompts; do
+  for dir in extensions skills prompts themes; do
     [[ -d "$DST/$dir" ]] || continue
     for entry in "$DST/$dir"/*; do
       [[ -e "$entry" || -L "$entry" ]] || continue
@@ -252,7 +252,7 @@ if [[ $UNINSTALL -eq 1 ]]; then
 fi
 
 # 1. extensiones
-title "1/4  Extensiones  (*.ts)"
+title "1/5  Extensiones  (*.ts)"
 ext_names=()
 shopt -s nullglob 2>/dev/null || true
 ext_files=("$SRC"/extensions/*.ts)
@@ -269,7 +269,7 @@ fi
 clear_orphans "$DST/extensions" ${ext_names[@]+"${ext_names[@]}"}
 
 # 2. skills
-title "2/4  Skills  (subcarpetas)"
+title "2/5  Skills  (subcarpetas)"
 skill_names=()
 found_skill=0
 for d in "$SRC"/skills/*/; do
@@ -285,7 +285,7 @@ done
 clear_orphans "$DST/skills" ${skill_names[@]+"${skill_names[@]}"}
 
 # 3. prompts
-title "3/4  Prompts  (*.md)"
+title "3/5  Prompts  (*.md)"
 prompt_names=()
 prompt_files=("$SRC"/prompts/*.md)
 if [[ ${#prompt_files[@]} -eq 0 ]]; then
@@ -300,8 +300,24 @@ else
 fi
 clear_orphans "$DST/prompts" ${prompt_names[@]+"${prompt_names[@]}"}
 
-# 4. settings
-title "4/4  Settings  (merge settings.base.json)"
+# 4. themes
+title "4/5  Themes  (*.json)"
+theme_names=()
+theme_files=("$SRC"/themes/*.json)
+if [[ ${#theme_files[@]} -eq 0 ]]; then
+  dim "(sin themes .json para enlazar)"
+else
+  for f in "${theme_files[@]}"; do
+    name="$(basename "$f")"
+    [[ "$name" == ".gitkeep" ]] && continue
+    theme_names+=("$name")
+    install_entry "$f" "$DST/themes/$name" "themes/$name"
+  done
+fi
+clear_orphans "$DST/themes" ${theme_names[@]+"${theme_names[@]}"}
+
+# 5. settings
+title "5/5  Settings  (merge settings.base.json)"
 merge_settings "$SRC/settings.base.json" "$DST/settings.json"
 
 # resumen

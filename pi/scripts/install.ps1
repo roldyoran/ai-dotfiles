@@ -171,6 +171,7 @@ try {
   Ensure-Dir (Join-Path $Target "extensions")
   Ensure-Dir (Join-Path $Target "skills")
   Ensure-Dir (Join-Path $Target "prompts")
+  Ensure-Dir (Join-Path $Target "themes")
 
   $extSrc = Join-Path $AgentSrc "extensions"
   $skillsSrc = Join-Path $AgentSrc "skills"
@@ -179,7 +180,7 @@ try {
   # ---- desinstalar: quita solo links, deja archivos reales intactos ----
   if ($Uninstall) {
     Write-Title "Desinstalando links del repo"
-    foreach ($dir in @("extensions", "skills", "prompts")) {
+    foreach ($dir in @("extensions", "skills", "prompts", "themes")) {
       $td = Join-Path $Target $dir
       if (-not (Test-Path -LiteralPath $td)) { continue }
       Get-ChildItem -LiteralPath $td -Force | Where-Object { $_.Name -ne ".gitkeep" } | ForEach-Object {
@@ -198,7 +199,7 @@ try {
   }
 
   # ---- 1. extensiones ----
-  Write-Title "1/4  Extensiones  (*.ts)"
+  Write-Title "1/5  Extensiones  (*.ts)"
   $extFiles = @()
   if (Test-Path -LiteralPath $extSrc) {
     $extFiles = @(Get-ChildItem -LiteralPath $extSrc -Filter *.ts -File -Force | Where-Object { $_.Name -ne ".gitkeep" })
@@ -210,7 +211,7 @@ try {
   Clear-Orphans (Join-Path $Target "extensions") @($extFiles | ForEach-Object { $_.Name }) "extensions"
 
   # ---- 2. skills ----
-  Write-Title "2/4  Skills  (subcarpetas)"
+  Write-Title "2/5  Skills  (subcarpetas)"
   $skillDirs = @()
   if (Test-Path -LiteralPath $skillsSrc) {
     $skillDirs = @(Get-ChildItem -LiteralPath $skillsSrc -Directory -Force | Where-Object { $_.Name -ne ".gitkeep" -and $_.Name -notlike ".git*" })
@@ -225,7 +226,7 @@ try {
   Clear-Orphans (Join-Path $Target "skills") @($skillDirs | ForEach-Object { $_.Name }) "skills"
 
   # ---- 3. prompts ----
-  Write-Title "3/4  Prompts  (*.md)"
+  Write-Title "3/5  Prompts  (*.md)"
   $promptFiles = @()
   if (Test-Path -LiteralPath $promptsSrc) {
     $promptFiles = @(Get-ChildItem -LiteralPath $promptsSrc -Filter *.md -File -Force | Where-Object { $_.Name -ne ".gitkeep" })
@@ -236,8 +237,20 @@ try {
   }
   Clear-Orphans (Join-Path $Target "prompts") @($promptFiles | ForEach-Object { $_.Name }) "prompts"
 
-  # ---- 4. settings (merge con backup) ----
-  Write-Title "4/4  Settings  (merge settings.base.json)"
+  # ---- 4. themes ----
+  Write-Title "4/5  Themes  (*.json)"
+  $themeFiles = @()
+  if (Test-Path -LiteralPath (Join-Path $AgentSrc "themes")) {
+    $themeFiles = @(Get-ChildItem -LiteralPath (Join-Path $AgentSrc "themes") -Filter *.json -File -Force | Where-Object { $_.Name -ne ".gitkeep" })
+  }
+  if ($themeFiles.Count -eq 0) { Write-Dim "(sin themes .json para enlazar)" }
+  foreach ($f in $themeFiles) {
+    Install-Entry $f.FullName (Join-Path (Join-Path $Target "themes") $f.Name) "themes/$($f.Name)"
+  }
+  Clear-Orphans (Join-Path $Target "themes") @($themeFiles | ForEach-Object { $_.Name }) "themes"
+
+  # ---- 5. settings (merge con backup) ----
+  Write-Title "5/5  Settings  (merge settings.base.json)"
   $basePath = Join-Path $AgentSrc "settings.base.json"
   $settingsPath = Join-Path $Target "settings.json"
   try {

@@ -75,7 +75,7 @@ function fmtCwd(cwd: string, home: string | undefined): string {
 
 /** Número a mostrar: tokens actuales de la ventana (lo mismo que mide la barra).
  * Tras compaction tokens es null → cae a suma de outputs hasta la próxima respuesta. */
-function readUsage(ctx: ExtensionContext): { text: string; percent: number | null; window: number } {
+function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null; percent: number | null; window: number } {
   let percent: number | null = 0;
   let win = 0;
   let tokens: number | null = null;
@@ -94,8 +94,9 @@ function readUsage(ctx: ExtensionContext): { text: string; percent: number | nul
       win = 0;
     }
   }
-  if (tokens !== null && tokens !== undefined) return { text: fmt(tokens), percent, window: win };
-  return { text: fmt(outputFallback(ctx)), percent, window: win };
+  if (tokens !== null && tokens !== undefined) return { text: fmt(tokens), tokens, percent, window: win };
+  const fb = outputFallback(ctx);
+  return { text: fmt(fb), tokens: fb, percent, window: win };
 }
 
 /** Suma solo outputs (cada respuesta genera tokens nuevos, sin doble conteo).
@@ -121,11 +122,23 @@ function outputFallback(ctx: ExtensionContext): number {
 
 const BAR_W = 10;
 
-function bar(pct: number | null, theme: { fg(c: string, s: string): string }): string {
+function bar(tokens: number | null, pct: number | null, theme: { fg(c: string, s: string): string }): string {
   const raw = pct === null || pct <= 0 ? 0 : Math.round((pct / 100) * BAR_W);
   // Mínimo 1 bloque si hay algo de contexto, para que la barra siempre se vea.
   const filled = pct === null || pct <= 0 ? 0 : Math.max(1, Math.min(BAR_W, raw));
-  const color = pct !== null && pct > 90 ? "error" : pct !== null && pct > 70 ? "warning" : "accent";
+  // Verde <300k, amarillo >=300k, rojo >=600k. Sin dato de tokens, cae a %.
+  const color =
+    tokens !== null && tokens !== undefined
+      ? tokens >= 600000
+        ? "error"
+        : tokens >= 300000
+          ? "warning"
+          : "success"
+      : pct !== null && pct > 90
+        ? "error"
+        : pct !== null && pct > 70
+          ? "warning"
+          : "success";
   return theme.fg(color, "█".repeat(filled)) + theme.fg("dim", "░".repeat(BAR_W - filled));
 }
 
@@ -210,7 +223,7 @@ function applyMin(ctx: ExtensionContext): void {
           after = "";
           leftW = visibleWidth(before) + BAR_W;
         }
-        const barStr = bar(pct, theme);
+        const barStr = bar(usage.tokens, pct, theme);
         const leftFinal = theme.fg("dim", before) + barStr + (after ? theme.fg("dim", after) : "");
 
         let right = modelRight(c, footerData, leftW, width);
