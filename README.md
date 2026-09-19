@@ -1,42 +1,47 @@
-# ai-dotfiles — Configuraciones multi-harness
+# ai-dotfiles — Multi-harness configurations
 
-Repo único para gestionar la configuración de distintos harnesses de IA.
-Hoy: **pi**. Mañana: `claude/`, `codex/`, `opencode/`, `gemini/`, etc.
+> 🇪🇸 Versión en español: [README.es.md](README.es.md)
+
+Single repo to manage the configuration of different AI harnesses.
+Today: **pi**. Tomorrow: `claude/`, `codex/`, `opencode/`, `gemini/`, etc.
 
 ```
 ai-dotfiles/
-├── README.md            # Este archivo
-├── shared/              # Principios, memoria y docs compartidos entre harnesses
-│   ├── PRINCIPLES.md
-│   └── MEMORY.md
-├── pi/                  # Todo lo de pi-coding-agent (harness activo)
-│   ├── README.md
-│   ├── agent/           # Espejo de ~/.pi/agent/
+├── README.md            # This file (EN) — see README.es.md for Spanish
+├── README.es.md         # Este archivo en español
+├── pi/                  # Everything about pi-coding-agent (active harness)
+│   ├── README.md        # (EN) — see README.es.md for Spanish
+│   ├── README.es.md
+│   ├── agent/           # Mirror of ~/.pi/agent/
 │   │   ├── settings.base.json
 │   │   ├── extensions/
 │   │   └── skills/
 │   └── scripts/
 │       ├── install.ps1
 │       └── install.sh
-├── claude/              # (futuro)
-├── codex/               # (futuro)
-└── opencode/            # (futuro)
+├── claude/              # (future)
+├── codex/               # (future)
+└── opencode/            # (future)
 ```
 
-## Filosofía
+## Philosophy
 
-1. **El repo es la fuente de verdad.** Nada se edita directamente en `~/.pi`.
-2. **Cada harness tiene su carpeta** (`pi/`, `claude/`...) con su formato nativo.
-3. **`shared/` es cross-harness**: principios y memoria que cada harness inyecta a su manera (en pi vía extensión `00-boot`).
-4. **Instalación por symlink**: `pi/scripts/install.ps1` enlaza `pi/agent/*` → `~/.pi/agent/*`.
+1. **The repo is the source of truth.** Nothing is edited directly in `~/.pi`.
+2. **Each harness has its own folder** (`pi/`, `claude/`...) with its native format.
+3. **Symlink install**: `pi/scripts/install.ps1` links `pi/agent/*` → `~/.pi/agent/*`.
 
-## Uso rápido (pi)
+## Quick start (pi)
 
 ```powershell
 cd pi/scripts
-./install.ps1        # enlaza extensions + skills, mergea settings.base.json
-pi                  # arranca con tu sistema cargado
-/reload             # recarga extensiones tras editar el repo
+./install.ps1        # links extensions + skills, merges settings.base.json
+pi                  # starts with your system loaded
+/reload             # reloads extensions after editing the repo
 ```
 
-Ver `pi/README.md` para el detalle del sistema.
+See `pi/README.md` for the system detail.
+
+## Author
+
+These configurations and extensions are by developer **roldyoran**.
+They are personal setups, but open for anyone to use and improve.
