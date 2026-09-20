@@ -7,7 +7,10 @@
  *   ◈ 26k · █░░░░░░░░░ 2.1%/1.0M (auto)
  *
  * - `◈ 70k` = uso actual de la ventana de contexto (getContextUsage().tokens),
- *   el mismo número que mide la barra. NO es suma acumulada: sumar `input`
+ *   el mismo número que mide la barra. El % se deriva de esos tokens/ventana
+ *   en vez de fiarse de getContextUsage().percent, para que número y barra
+ *   nunca discrepen (p. ej. ◈ 4.6k con 44.1%/1.0M visto con opencode-go).
+ *   NO es suma acumulada: sumar `input`
  *   de cada mensaje multiplica de más porque cada input ya incluye el historial.
  * - `█░…` = barra de llenado del contexto total (getContextUsage().percent).
  * - `2.1%/1.0M (auto)` = mismo porcentaje/ventana que el footer original.
@@ -74,18 +77,21 @@ function fmtCwd(cwd: string, home: string | undefined): string {
 }
 
 /** Número a mostrar: tokens actuales de la ventana (lo mismo que mide la barra).
+ * El % se deriva AQUÍ de tokens/ventana (misma fuente) para que número y barra
+ * nunca puedan discrepar aunque pi devuelva un objeto inconsistente
+ * (visto con provider opencode-go: ◈ 4.6k frente a 44.1%/1.0M).
  * Tras compaction tokens es null → cae a suma de outputs hasta la próxima respuesta. */
 function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null; percent: number | null; window: number } {
-  let percent: number | null = 0;
+  let reportedPercent: number | null = null;
   let win = 0;
   let tokens: number | null = null;
   try {
     const u = ctx.getContextUsage?.();
-    percent = u?.percent ?? null;
+    reportedPercent = u?.percent ?? null;
     win = u?.contextWindow ?? 0;
     tokens = u?.tokens ?? null;
   } catch {
-    percent = null;
+    reportedPercent = null;
   }
   if (!win) {
     try {
@@ -94,8 +100,13 @@ function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null
       win = 0;
     }
   }
-  if (tokens !== null && tokens !== undefined) return { text: fmt(tokens), tokens, percent, window: win };
+  // Fuente única de verdad: el % sale de los mismos tokens que se muestran.
+  if (tokens !== null && tokens !== undefined) {
+    const percent = win > 0 ? (tokens / win) * 100 : reportedPercent;
+    return { text: fmt(tokens), tokens, percent, window: win };
+  }
   const fb = outputFallback(ctx);
+  const percent = win > 0 && fb > 0 ? (fb / win) * 100 : reportedPercent;
   return { text: fmt(fb), tokens: fb, percent, window: win };
 }
 
@@ -127,18 +138,18 @@ const BAR_W = 10;
  * lo pintado y lo no pintado; ▒▓ son de celda completa y funden bien. */
 const SHADES = ["", "▒", "▓"];
 
-/** Normaliza %: acepta 0-100 o 0-1, recorta a [0,100]. null/inválido → 0. */
+/** Normaliza % en escala 0-100 (la que devuelve pi): recorta a [0,100]. null/inválido → 0. */
 function normalizePct(pct: number | null): number {
   if (pct === null || pct === undefined || !Number.isFinite(pct) || pct <= 0) return 0;
-  const p = pct <= 1 ? pct * 100 : pct;
-  return Math.max(0, Math.min(100, p));
+  return Math.max(0, Math.min(100, pct));
 }
 
 function bar(pct: number | null, theme: { fg(c: string, s: string): string }): string {
   const p = normalizePct(pct);
   const exact = (p / 100) * BAR_W;
   let full = Math.floor(exact);
-  let frac = Math.round((exact - full) * 3);
+  // floor (no round): nunca sobre-representa. 2.1 % -> vacia en vez de 10 %.
+  let frac = Math.floor((exact - full) * 3);
   if (frac === 3) {
     full += 1;
     frac = 0;
@@ -238,7 +249,7 @@ function applyMin(ctx: ExtensionContext): void {
           after = "";
           leftW = visibleWidth(before) + BAR_W;
         }
-        const barStr = bar(pct, theme);
+        const barStr = bar(pNorm, theme);
         const leftFinal = theme.fg("dim", before) + barStr + (after ? theme.fg("dim", after) : "");
 
         let right = modelRight(c, footerData, leftW, width);
