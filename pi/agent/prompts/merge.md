@@ -20,3 +20,4 @@ Pasos:
    - NO uses `git -c user.name=...` ni `user.email=...`.
    - Nunca `--force`, nunca borres ramas sin preguntar, nunca push sin confirmación.
 7. Al final: `git log --oneline -n 5` y `git status --short`.
+8. Solo si el argumento fue `m` y no hubo ningún problema en los pasos anteriores: vuelve a `develop` con `git checkout develop` y confirma la rama con `git branch --show-current`.
