@@ -122,24 +122,37 @@ function outputFallback(ctx: ExtensionContext): number {
 
 const BAR_W = 10;
 
-function bar(tokens: number | null, pct: number | null, theme: { fg(c: string, s: string): string }): string {
-  const raw = pct === null || pct <= 0 ? 0 : Math.round((pct / 100) * BAR_W);
-  // Mínimo 1 bloque si hay algo de contexto, para que la barra siempre se vea.
-  const filled = pct === null || pct <= 0 ? 0 : Math.max(1, Math.min(BAR_W, raw));
-  // Verde <300k, amarillo >=300k, rojo >=600k. Sin dato de tokens, cae a %.
-  const color =
-    tokens !== null && tokens !== undefined
-      ? tokens >= 600000
-        ? "error"
-        : tokens >= 300000
-          ? "warning"
-          : "success"
-      : pct !== null && pct > 90
-        ? "error"
-        : pct !== null && pct > 70
-          ? "warning"
-          : "success";
-  return theme.fg(color, "█".repeat(filled)) + theme.fg("dim", "░".repeat(BAR_W - filled));
+/** Sombreado parcial: misma familia que el vacío (░) para no dejar hueco.
+ * Los bloques ▏▎▍ dejan fondo vacío y se ve un espacio raro entre
+ * lo pintado y lo no pintado; ▒▓ son de celda completa y funden bien. */
+const SHADES = ["", "▒", "▓"];
+
+/** Normaliza %: acepta 0-100 o 0-1, recorta a [0,100]. null/inválido → 0. */
+function normalizePct(pct: number | null): number {
+  if (pct === null || pct === undefined || !Number.isFinite(pct) || pct <= 0) return 0;
+  const p = pct <= 1 ? pct * 100 : pct;
+  return Math.max(0, Math.min(100, p));
+}
+
+function bar(pct: number | null, theme: { fg(c: string, s: string): string }): string {
+  const p = normalizePct(pct);
+  const exact = (p / 100) * BAR_W;
+  let full = Math.floor(exact);
+  let frac = Math.round((exact - full) * 3);
+  if (frac === 3) {
+    full += 1;
+    frac = 0;
+  }
+  full = Math.min(BAR_W, full);
+  // Color siempre relativo a la ventana actual, no a umbrales absolutos de tokens.
+  const color = p >= 90 ? "error" : p >= 70 ? "warning" : "success";
+  let filledStr = "█".repeat(full);
+  if (frac > 0 && full < BAR_W) filledStr += SHADES[frac];
+  const usedCells = full + (frac > 0 && full < BAR_W ? 1 : 0);
+  const empty = "░".repeat(Math.max(0, BAR_W - usedCells));
+  // Sin mínimo forzado: 0 % real → barra vacía (honesta). 2.1 % ya no pinta 10 %.
+  if (!filledStr) return theme.fg("dim", empty);
+  return theme.fg(color, filledStr) + theme.fg("dim", empty);
 }
 
 function pwdText(ctx: ExtensionContext, footerData: { getGitBranch(): string | null }): string {
@@ -206,13 +219,15 @@ function applyMin(ctx: ExtensionContext): void {
         const usage = readUsage(c);
         const pct = usage.percent;
         const win = usage.window;
-        const pctText = pct === null ? "?" : pct.toFixed(1);
+        const pNorm = pct === null ? null : normalizePct(pct);
+        const pctText = pNorm === null ? "?" : pNorm.toFixed(1);
+        const winText = win > 0 ? fmt(win) : "?";
         const auto = " (auto)";
         const total = usage.text;
 
         // Segmentos izquierdos; el bar se colorea aparte para no romper el dim.
         let before = `◈ ${total} · `;
-        let after = ` ${pctText}%/${fmt(win)}${auto}`;
+        let after = ` ${pctText}%/${winText}${auto}`;
         let leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         if (leftW > width) {
           after = ` ${pctText}%${auto}`; // recorta ventana primero, nunca la barra
@@ -223,7 +238,7 @@ function applyMin(ctx: ExtensionContext): void {
           after = "";
           leftW = visibleWidth(before) + BAR_W;
         }
-        const barStr = bar(usage.tokens, pct, theme);
+        const barStr = bar(pct, theme);
         const leftFinal = theme.fg("dim", before) + barStr + (after ? theme.fg("dim", after) : "");
 
         let right = modelRight(c, footerData, leftW, width);
