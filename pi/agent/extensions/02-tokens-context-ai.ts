@@ -4,7 +4,7 @@
  * Cambia esta línea larga del footer original:
  *   ↑22k ↓3.9k R158k CH96.2% $0.003 2.1%/1.0M (auto)
  * por esta versión compacta:
- *   ◈ 26k · █░░░░░░░░░ 2.1%/1.0M (auto)
+ *   ◈ 26k · █░░░░░░░░░ 2.1%/1.0M (auto) $0.003
  *
  * - `◈ 70k` = uso actual de la ventana de contexto (getContextUsage().tokens),
  *   el mismo número que mide la barra. El % se deriva de esos tokens/ventana
@@ -13,7 +13,8 @@
  *   NO es suma acumulada: sumar `input`
  *   de cada mensaje multiplica de más porque cada input ya incluye el historial.
  * - `█░…` = barra de llenado del contexto total (getContextUsage().percent).
- * - `2.1%/1.0M (auto)` = mismo porcentaje/ventana que el footer original.
+ * - `2.1%/1.0M (auto) $0.003` = mismo porcentaje/ventana/auto que el original
+ *   más el gasto acumulado (`cost.total`, igual que `$0.003` del original).
  * - El resto queda igual: línea de pwd (+branch, +session) y modelo a la derecha.
  *
  * Comando:
@@ -131,6 +132,45 @@ function outputFallback(ctx: ExtensionContext): number {
   return total;
 }
 
+/** Gasto acumulado igual que el footer original (footer.ts): suma cost.total de
+ * usage + assistant + toolResult + branch_summary/compaction. Solo se muestra
+ * si hay gasto o es suscripción (kimi-coding o modelRuntime). */
+function readCost(ctx: ExtensionContext): { cost: number; usingSubscription: boolean; text: string } {
+  let cost = 0;
+  try {
+    for (const e of ctx.sessionManager.getEntries() ?? []) {
+      const entry = e as unknown as Record<string, unknown>;
+      const type = entry["type"] as string | undefined;
+      if (type === "usage") {
+        const u = entry["usage"] as { cost?: { total?: number } } | undefined;
+        cost += u?.cost?.total ?? 0;
+      } else if (type === "message") {
+        const msg = entry["message"] as Record<string, unknown> | undefined;
+        const role = msg?.["role"] as string | undefined;
+        const u = msg?.["usage"] as { cost?: { total?: number } } | undefined;
+        if (role === "assistant" || (role === "toolResult" && u)) cost += u?.cost?.total ?? 0;
+      } else if (type === "branch_summary" || type === "compaction") {
+        const u = entry["usage"] as { cost?: { total?: number } } | undefined;
+        cost += u?.cost?.total ?? 0;
+      }
+    }
+  } catch {
+    /* sesión aún sin entries */
+  }
+  const provider = (ctx as unknown as { model?: { provider?: string } }).model?.provider;
+  let usingSubscription = provider === "kimi-coding";
+  try {
+    const rt = (ctx as unknown as { modelRuntime?: { isUsingSubscription?: (p: string) => boolean } }).modelRuntime;
+    if (!usingSubscription && provider && typeof rt?.isUsingSubscription === "function") {
+      usingSubscription = rt.isUsingSubscription(provider);
+    }
+  } catch {
+    /* sin modelRuntime */
+  }
+  const text = cost > 0 || usingSubscription ? `$${cost.toFixed(3)}${usingSubscription ? " (sub)" : ""}` : "";
+  return { cost, usingSubscription, text };
+}
+
 const BAR_W = 10;
 
 /** Sombreado parcial: misma familia que el vacío (░) para no dejar hueco.
@@ -235,19 +275,23 @@ function applyMin(ctx: ExtensionContext): void {
         const winText = win > 0 ? fmt(win) : "?";
         const auto = " (auto)";
         const total = usage.text;
+        const costSuffix = (() => {
+          const t = readCost(c).text;
+          return t ? ` ${t}` : "";
+        })();
 
         // Segmentos izquierdos; el bar se colorea aparte para no romper el dim.
         let before = `◈ ${total} · `;
-        let after = ` ${pctText}%/${winText}${auto}`;
+        let after = ` ${pctText}%/${winText}${auto}${costSuffix}`;
         let leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         if (leftW > width) {
-          after = ` ${pctText}%${auto}`; // recorta ventana primero, nunca la barra
+          after = ` ${pctText}%${auto}${costSuffix}`; // recorta ventana primero, nunca la barra
           leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         }
         if (leftW > width) {
           before = `◈ ${total} `;
-          after = "";
-          leftW = visibleWidth(before) + BAR_W;
+          after = costSuffix; // sin % en mínimo, pero el gasto se mantiene
+          leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         }
         const barStr = bar(pNorm, theme);
         const leftFinal = theme.fg("dim", before) + barStr + (after ? theme.fg("dim", after) : "");
