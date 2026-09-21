@@ -15,13 +15,15 @@
   ./install.ps1 -Uninstall   # quita solo los links creados por el repo
 .EXAMPLE
   ./install.ps1 -Force       # si hay archivos reales con el mismo nombre, los respalda (.bak) y reemplaza
+  # (los .bak viejos se podan: solo quedan los ultimos -KeepBackups por archivo)
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
   [switch]$Copy,
   [switch]$Uninstall,
   [switch]$Force,
-  [switch]$NoColor
+  [switch]$NoColor,
+  [int]$KeepBackups = 2
 )
 
 $ErrorActionPreference = "Stop"
@@ -52,7 +54,7 @@ else { $RepoPi = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.
 $AgentSrc = Join-Path $RepoPi "agent"
 $Target   = Join-Path $HOME ".pi/agent"
 
-$script:NLinked = 0; $script:NCopied = 0; $script:NSkipped = 0; $script:NCleaned = 0; $script:NBackedUp = 0
+$script:NLinked = 0; $script:NCopied = 0; $script:NSkipped = 0; $script:NCleaned = 0; $script:NBackedUp = 0; $script:NPruned = 0
 
 function Ensure-Dir($p) {
   if (-not (Test-Path -LiteralPath $p)) {
@@ -157,6 +159,34 @@ function Clear-Orphans($targetDir, [string[]]$validNames, [string]$kind) {
   }
 }
 
+function Clear-OldBackups($targetDir, [int]$keep, [string]$kind) {
+  # Poda .bak-*/.backup-* viejos: conserva solo los $keep mas recientes por archivo base.
+  if ($keep -lt 0) { return }
+  if (-not (Test-Path -LiteralPath $targetDir)) { return }
+  $backs = Get-ChildItem -LiteralPath $targetDir -Force | Where-Object {
+    $_.Name -match '\.bak-' -or $_.Name -match '\.backup-'
+  }
+  if (-not $backs) { return }
+  $groups = $backs | Group-Object {
+    $n = $_.Name
+    if ($n -match '^(.*)\.bak-\d{8}-\d{6}') { $Matches[1] }
+    elseif ($n -match '^(.*)\.backup-\d{8}-\d{6}') { $Matches[1] }
+    elseif ($n -match '^(.*)\.malo.*\.bak$') { $Matches[1] }
+    else { $n }
+  }
+  foreach ($g in $groups) {
+    $sorted = $g.Group | Sort-Object LastWriteTime, Name -Descending
+    $drop = @($sorted | Select-Object -Skip $keep)
+    foreach ($old in $drop) {
+      if ($PSCmdlet.ShouldProcess($old.FullName, "podar backup viejo")) {
+        Remove-Item -LiteralPath $old.FullName -Recurse -Force
+        $script:NPruned++
+        Write-Dim "podo backup viejo ($kind): $($old.Name)"
+      }
+    }
+  }
+}
+
 # ---------------------------------------------------------------- main ------
 try {
   Show-Banner
@@ -209,6 +239,7 @@ try {
     Install-Entry $f.FullName (Join-Path (Join-Path $Target "extensions") $f.Name) "extensions/$($f.Name)"
   }
   Clear-Orphans (Join-Path $Target "extensions") @($extFiles | ForEach-Object { $_.Name }) "extensions"
+  Clear-OldBackups (Join-Path $Target "extensions") $KeepBackups "extensions"
 
   # ---- 2. skills ----
   Write-Title "2/5  Skills  (subcarpetas)"
@@ -224,6 +255,7 @@ try {
     Install-Entry $d.FullName (Join-Path (Join-Path $Target "skills") $d.Name) "skills/$($d.Name)"
   }
   Clear-Orphans (Join-Path $Target "skills") @($skillDirs | ForEach-Object { $_.Name }) "skills"
+  Clear-OldBackups (Join-Path $Target "skills") $KeepBackups "skills"
 
   # ---- 3. prompts ----
   Write-Title "3/5  Prompts  (*.md)"
@@ -236,6 +268,7 @@ try {
     Install-Entry $f.FullName (Join-Path (Join-Path $Target "prompts") $f.Name) "prompts/$($f.Name)"
   }
   Clear-Orphans (Join-Path $Target "prompts") @($promptFiles | ForEach-Object { $_.Name }) "prompts"
+  Clear-OldBackups (Join-Path $Target "prompts") $KeepBackups "prompts"
 
   # ---- 4. themes ----
   Write-Title "4/5  Themes  (*.json)"
@@ -248,6 +281,7 @@ try {
     Install-Entry $f.FullName (Join-Path (Join-Path $Target "themes") $f.Name) "themes/$($f.Name)"
   }
   Clear-Orphans (Join-Path $Target "themes") @($themeFiles | ForEach-Object { $_.Name }) "themes"
+  Clear-OldBackups (Join-Path $Target "themes") $KeepBackups "themes"
 
   # ---- 5. settings (merge con backup) ----
   Write-Title "5/5  Settings  (merge settings.base.json)"
@@ -286,6 +320,7 @@ try {
   }
   $cur | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $settingsPath -Encoding UTF8
   Write-Ok "settings fusionadas en $settingsPath"
+  Clear-OldBackups $Target $KeepBackups "settings"
 
   # ---- resumen ----
   Write-C "`n+--------------------------------------------------------------+" "Cyan"
@@ -295,6 +330,7 @@ try {
   Write-C "   Copiados      : " "White" -NoNewline; Write-C "$($script:NCopied)" "Green"
   Write-C "   Huerfanos limp: " "White" -NoNewline; Write-C "$($script:NCleaned)" "DarkCyan"
   Write-C "   Backups       : " "White" -NoNewline; Write-C "$($script:NBackedUp)" "DarkCyan"
+  Write-C "   Backups podados: " "White" -NoNewline; Write-C "$($script:NPruned)" "DarkCyan"
   Write-C "   Omitidos      : " "White" -NoNewline; Write-C "$($script:NSkipped)" "Yellow"
 
   Write-C "`n  Siguiente paso:" "Cyan"

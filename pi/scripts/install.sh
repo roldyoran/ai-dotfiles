@@ -5,6 +5,7 @@
 #   ./install.sh              # symlinks (por defecto)
 #   ./install.sh --copy       # copiar en vez de symlink
 #   ./install.sh --force      # respalda (.bak) archivos reales que choquen y reemplaza
+#   ./install.sh --keep-backups=N  # conserva solo los ultimos N .bak por archivo (def: 2)
 #   ./install.sh --uninstall  # quita solo los links del repo
 #   ./install.sh --no-color   # sin colores
 #   ./install.sh --help       # ayuda
@@ -15,19 +16,25 @@ MODE="link"
 FORCE=0
 UNINSTALL=0
 NO_COLOR=0
+KEEP_BACKUPS=2
 
 for arg in "$@"; do
   case "$arg" in
     --copy) MODE="copy" ;;
     --force) FORCE=1 ;;
+    --keep-backups=*) KEEP_BACKUPS="${arg#*=}" ;;
     --uninstall) UNINSTALL=1 ;;
     --no-color) NO_COLOR=1 ;;
     -h|--help)
-      sed -n '2,10p' "$0" | sed 's/^# \?//'
+      sed -n '2,11p' "$0" | sed 's/^# \?//'
       exit 0 ;;
     *) echo "Flag desconocido: $arg (usa --help)" >&2; exit 2 ;;
   esac
 done
+
+if ! [[ "$KEEP_BACKUPS" =~ ^[0-9]+$ ]]; then
+  echo "--keep-backups debe ser un numero >= 0 (recibido: $KEEP_BACKUPS)" >&2; exit 2
+fi
 
 # ---- colores (respetan NO_COLOR y salida no-tty) ----
 if [[ $NO_COLOR -eq 1 || -n "${NO_COLOR:-}" && "${NO_COLOR:-}" != "0" ]] || [[ ! -t 1 ]]; then
@@ -57,7 +64,7 @@ REPO_PI="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$REPO_PI/agent"
 DST="$HOME/.pi/agent"
 
-N_LINKED=0; N_COPIED=0; N_SKIPPED=0; N_CLEANED=0; N_BACKEDUP=0
+N_LINKED=0; N_COPIED=0; N_SKIPPED=0; N_CLEANED=0; N_BACKEDUP=0; N_PRUNED=0
 
 is_link() { [[ -L "$1" ]]; }
 
@@ -141,6 +148,45 @@ clear_orphans() { # clear_orphans <targetDir> <validNames...>: borra links cuyo 
       fi
     fi
   done
+}
+
+prune_backups() { # prune_backups <dir> [label]: conserva solo los ultimos KEEP_BACKUPS .bak/.backup por archivo base
+  local dir="$1" label="${2:-backups}" keep="$KEEP_BACKUPS"
+  if [[ "$keep" -lt 0 ]]; then return 0; fi
+  [[ -d "$dir" ]] || return 0
+  local list bases b entry mtime tmp tmp2 i
+  tmp="$(mktemp)"
+  for entry in "$dir"/*.bak-* "$dir"/*.backup-* "$dir"/*.malo*.bak; do
+    [[ -e "$entry" || -L "$entry" ]] || continue
+    b="$(basename "$entry")"
+    b="$(printf '%s' "$b" | sed -E 's/\.bak-[0-9]{8}-[0-9]{6}.*$//; s/\.backup-[0-9]{8}-[0-9]{6}.*$//; s/\.malo.*\.bak$//')"
+    printf '%s\n' "$b" >> "$tmp"
+  done
+  bases="$(sort -u "$tmp" 2>/dev/null)"
+  rm -f "$tmp"
+  [[ -n "$bases" ]] || return 0
+  while IFS= read -r b; do
+    [[ -n "$b" ]] || continue
+    tmp2="$(mktemp)"
+    for entry in "$dir/$b".bak-* "$dir/$b".backup-* "$dir/$b".malo*.bak; do
+      [[ -e "$entry" || -L "$entry" ]] || continue
+      if mtime="$(stat -c %Y "$entry" 2>/dev/null)"; then :;
+      elif mtime="$(stat -f %m "$entry" 2>/dev/null)"; then :;
+      else mtime=0; fi
+      printf '%s\t%s\n' "$mtime" "$entry" >> "$tmp2"
+    done
+    i=0
+    while IFS= read -r entry; do
+      [[ -n "$entry" ]] || continue
+      i=$((i + 1))
+      if [[ $i -gt $keep ]]; then
+        rm -rf "$entry"
+        N_PRUNED=$((N_PRUNED + 1))
+        dim "podo backup viejo ($label): $(basename "$entry")"
+      fi
+    done < <(sort -rn "$tmp2" 2>/dev/null | cut -f2-)
+    rm -f "$tmp2"
+  done <<< "$bases"
 }
 
 pick_python() {
@@ -267,6 +313,7 @@ else
   done
 fi
 clear_orphans "$DST/extensions" ${ext_names[@]+"${ext_names[@]}"}
+prune_backups "$DST/extensions" "extensions"
 
 # 2. skills
 title "2/5  Skills  (subcarpetas)"
@@ -283,6 +330,7 @@ for d in "$SRC"/skills/*/; do
 done
 [[ $found_skill -eq 0 ]] && dim "(sin skills todavia - crea una en pi/agent/skills/mi-skill/SKILL.md)"
 clear_orphans "$DST/skills" ${skill_names[@]+"${skill_names[@]}"}
+prune_backups "$DST/skills" "skills"
 
 # 3. prompts
 title "3/5  Prompts  (*.md)"
@@ -299,6 +347,7 @@ else
   done
 fi
 clear_orphans "$DST/prompts" ${prompt_names[@]+"${prompt_names[@]}"}
+prune_backups "$DST/prompts" "prompts"
 
 # 4. themes
 title "4/5  Themes  (*.json)"
@@ -315,10 +364,12 @@ else
   done
 fi
 clear_orphans "$DST/themes" ${theme_names[@]+"${theme_names[@]}"}
+prune_backups "$DST/themes" "themes"
 
 # 5. settings
 title "5/5  Settings  (merge settings.base.json)"
 merge_settings "$SRC/settings.base.json" "$DST/settings.json"
+prune_backups "$DST" "settings"
 
 # resumen
 printf "\n${C_CYAN}+--------------------------------------------------------------+${C_RST}\n"
@@ -328,6 +379,7 @@ printf "   Links creados : ${C_GREEN}%s${C_RST}\n" "$N_LINKED"
 printf "   Copiados      : ${C_GREEN}%s${C_RST}\n" "$N_COPIED"
 printf "   Huerfanos limp: ${C_CYAN}%s${C_RST}\n" "$N_CLEANED"
 printf "   Backups       : ${C_CYAN}%s${C_RST}\n" "$N_BACKEDUP"
+printf "   Backups podados : ${C_CYAN}%s${C_RST}\n" "$N_PRUNED"
 printf "   Omitidos      : ${C_YELLOW}%s${C_RST}\n" "$N_SKIPPED"
 printf "\n  ${C_CYAN}Siguiente paso:${C_RST}\n"
 printf "    1. ${C_YELLOW}pi${C_RST}          # arranca con tu sistema\n"
