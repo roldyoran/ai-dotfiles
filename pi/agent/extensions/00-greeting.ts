@@ -287,19 +287,23 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
       ];
 
       const lines: string[] = [""];
-      lines.push(truncateToWidth(top, width));
-      lines.push(truncateToWidth(row(L[0], R[0]), width));
-      lines.push(truncateToWidth(row(L[1], R[1]), width));
-      lines.push(truncateToWidth(row(L[2], R[2]), width));
-      lines.push(truncateToWidth(rdiv(L[3]), width));
-      lines.push(truncateToWidth(row(L[4], R[3]), width));
-      lines.push(truncateToWidth(row(L[5], R[4]), width));
-      lines.push(truncateToWidth(rdiv(L[6]), width));
-      lines.push(truncateToWidth(row(L[7], R[5]), width));
-      lines.push(truncateToWidth(row(L[8], R[6]), width));
-      lines.push(truncateToWidth(row(L[9], R[7]), width));
-      lines.push(truncateToWidth(row(L[10], padEndVisible("", rightW)), width));
-      lines.push(truncateToWidth(bot, width));
+      // Centra toda la tabla en pantalla (el contenido interno no cambia).
+      const offset = Math.max(0, Math.floor((width - W) / 2));
+      const pad = " ".repeat(offset);
+      const out = (s: string) => pad + truncateToWidth(s, W);
+      lines.push(out(top));
+      lines.push(out(row(L[0], R[0])));
+      lines.push(out(row(L[1], R[1])));
+      lines.push(out(row(L[2], R[2])));
+      lines.push(out(rdiv(L[3])));
+      lines.push(out(row(L[4], R[3])));
+      lines.push(out(row(L[5], R[4])));
+      lines.push(out(rdiv(L[6])));
+      lines.push(out(row(L[7], R[5])));
+      lines.push(out(row(L[8], R[6])));
+      lines.push(out(row(L[9], R[7])));
+      lines.push(out(row(L[10], padEndVisible("", rightW))));
+      lines.push(out(bot));
 
       return lines;
     },
