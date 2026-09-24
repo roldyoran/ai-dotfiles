@@ -5,7 +5,7 @@
  * (ver docs/settings.md y `pi/agent/settings.base.json`). Esta extensión aporta
  * el comando para verlo cuando quieras sin ensuciar el arranque:
  *
- *   /recursos   — ventana emergente de solo lectura con Context, Skills,
+ *   /resources  — ventana emergente de solo lectura con Context, Skills,
  *                 Prompts y Extensions (estilo de la UI original)
  *
  * Patrones oficiales usados (no reinventar):
@@ -191,12 +191,8 @@ export default function (pi: ExtensionAPI) {
   const handler = async (_args: string, ctx: ExtensionCommandContext) => {
     await showResources(pi, ctx);
   };
-  pi.registerCommand("recursos", {
-    description: "Muestra Context, Skills, Prompts y Extensions en ventana emergente",
-    handler,
-  });
   pi.registerCommand("resources", {
-    description: "Alias de /recursos",
+    description: "Show Context, Skills, Prompts and Extensions in a read-only popup",
     handler,
   });
 }

@@ -217,8 +217,8 @@ function centerCell(s: string, n: number): string {
   return " ".repeat(left) + t + " ".repeat(right);
 }
 
-// 4 saludos que caben en la columna del logo.
-const LEFT_GREETINGS = ["Welcome back!", "¡Hola de nuevo!", "¡A construir!", "¡Vamos al código!"];
+// 8 greetings (EN) that fit in the logo column (<=26 cells), shown at random.
+const LEFT_GREETINGS = ["Welcome back!", "Let's build!", "Ready to code?", "Hello, builder!", "Time to ship it!", "Let's create!", "Happy coding!", "Hey, let's go!"];
 
 function pickGreeting(): string {
   return LEFT_GREETINGS[Math.floor(Math.random() * LEFT_GREETINGS.length)];
