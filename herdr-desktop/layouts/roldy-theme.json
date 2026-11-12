@@ -29,7 +29,7 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "spaces"
+                "mod": "roldy-spaces"
               },
               "size": {
                 "weight": 1
@@ -173,13 +173,13 @@
   "background": { "image": "backgrounds/imagen-back-2.jpg", "fit": "cover" },
   "colors": {
     "accent": "#f59e0b",
-    "background": "#0a0a0a80",
-    "canvas": "#0a0a0a80",
-    "chrome": "#0a0a0a80",
-    "surface": "#0a0a0a80",
-    "popover": "#0a0a0a80"
+    "background": "#0a0a0acc",
+    "canvas": "#0a0a0acc",
+    "chrome": "#0a0a0acc",
+    "surface": "#0a0a0acc",
+    "popover": "#0a0a0acc"
   },
-  "terminal_opacity": 0.5,
+  "terminal_opacity": 0.8,
   "terminal_padding": [
     14,
     12
