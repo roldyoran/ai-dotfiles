@@ -104,7 +104,7 @@
                     "height": 30,
                     "position": "top"
                   },
-                  "background": "background",
+                  "background": "#0a0a0a99",
                   "border": {
                     "width": 1,
                     "color": "border"
@@ -180,7 +180,7 @@
     "surface": "#0a0a0acc",
     "popover": "#0a0a0acc"
   },
-  "terminal_opacity": 0.6,
+  "terminal_opacity": 0.3,
   "terminal_padding": [
     14,
     12

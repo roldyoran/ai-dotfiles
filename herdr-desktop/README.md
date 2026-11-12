@@ -20,7 +20,7 @@ herdr-desktop/
 - layout: `roldy-theme` (acento `#f59e0b`, base neutral-950 `#0a0a0a`)
 - fondo: `backgrounds/mountain.jpg` con `fit: cover`
 - opacidad 80%: `background/canvas/chrome/surface/popover` en `#0a0a0acc`
-- `terminal_opacity: 0.6`
+- `terminal_opacity: 0.3` (pane de terminal en `#0a0a0a99` para que se note)
 - `work-body` con velo `#0a0a0acc` sobre sus rebordes
 - sidebar en `chrome`, divider root en `#262626` (neutral-800)
 - sidebar colapsado (<160px): letra inicial del space + punto de estado
