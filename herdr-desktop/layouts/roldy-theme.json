@@ -178,7 +178,7 @@
     "canvas": "#0a0a0acc",
     "chrome": "#0a0a0acc",
     "surface": "#0a0a0acc",
-    "popover": "#0a0a0acc"
+    "popover": "#0a0a0a"
   },
   "terminal_opacity": 0.3,
   "terminal_padding": [
