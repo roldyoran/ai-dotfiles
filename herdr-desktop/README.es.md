@@ -13,15 +13,15 @@ herdr-desktop/
   layouts/roldy-theme.json      # layout activo (clon de main)
   mods/roldy-spaces/main.js     # rail colapsado con letra + estado
   mods/roldy-spaces/mod.json
-  backgrounds/mountain.jpg      # fondo en uso (cover)
+  backgrounds/mountain_1.jpg    # fondo en uso (cover)
+  backgrounds/mountain.jpg        # fondo alternativo
   backgrounds/imagen-back-2.jpg # fondo alternativo
-  backgrounds/image-back.png    # fondo alternativo (cielo)
 ```
 
 ## Estado actual
 
 - layout: `roldy-theme` (acento `#f59e0b`, base neutral-950 `#0a0a0a`)
-- fondo: `backgrounds/mountain.jpg` con `fit: cover`
+- fondo: `backgrounds/mountain_1.jpg` con `fit: cover`
 - opacidad 80%: `background/canvas/chrome/surface/popover` en `#0a0a0acc`
 - `terminal_opacity: 0.3` (pane de terminal en `#0a0a0a99` para que se note)
 - menús/popups (`popover`) opacos al 100%
