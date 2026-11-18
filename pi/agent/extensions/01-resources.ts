@@ -1,26 +1,26 @@
 /**
- * 01-resources — muestra Context/Skills/Prompts/Extensions en overlay de solo lectura.
+ * 01-resources — shows Context/Skills/Prompts/Extensions in a read-only overlay.
  *
- * El listado de arranque lo oculta pi de forma oficial con `"quietStartup": true`
- * (ver docs/settings.md y `pi/agent/settings.base.json`). Esta extensión aporta
- * el comando para verlo cuando quieras sin ensuciar el arranque:
+ * pi officially hides the startup listing with `"quietStartup": true`
+ * (see docs/settings.md and `pi/agent/settings.base.json`). This extension adds
+ * the command to view it on demand without cluttering startup:
  *
- *   /resources  — ventana emergente de solo lectura con Context, Skills,
- *                 Prompts y Extensions (estilo de la UI original)
+ *   /resources  — read-only popup with Context, Skills,
+ *                 Prompts and Extensions (original UI style)
  *
- * Patrones oficiales usados (no reinventar):
- * - docs/extensions.md → pi.registerCommand, pi.getCommands (nombres por
- *   source: "extension"|"prompt"|"skill"), ctx.ui.custom con
+ * Official patterns used (do not reinvent):
+ * - docs/extensions.md → pi.registerCommand, pi.getCommands (names by
+ *   source: "extension"|"prompt"|"skill"), ctx.ui.custom with
  *   { overlay: true, overlayOptions }; ctx.getSystemPromptOptions()
- *   (solo en comandos) para los contextFiles del [Context].
- * - docs/tui.md → Overlay, Key Rules (theme del callback, truncateToWidth,
- *   tui.requestRender tras cambiar estado), matchesKey + Key para teclas;
- *   marco de ventana ┌┐└┘│ con colores borderAccent/mdHeading/dim.
- * - docs/skills.md → orígenes de skills; por eso Skills/Prompts salen de
- *   getCommands (fuente autoritativa) en vez de leer carpetas a mano.
- * - Etiquetas como la UI original (interactive-mode.js): Context en relativo
- *   al cwd (`AGENTS.md`) o `~` fuera de él; cabeceras `[Nombre] (n)`;
- *   filas en dim.
+ *   (commands only) for the [Context] contextFiles.
+ * - docs/tui.md → Overlay, Key Rules (callback theme, truncateToWidth,
+ *   tui.requestRender after state changes), matchesKey + Key for keys;
+ *   window frame ┌┐└┘│ with borderAccent/mdHeading/dim colors.
+ * - docs/skills.md → skill origins; hence Skills/Prompts come from
+ *   getCommands (authoritative source) instead of hand-reading folders.
+ * - Labels like the original UI (interactive-mode.js): Context relative to
+ *   cwd (`AGENTS.md`) or `~` outside it; `[Name] (n)` headers;
+ *   dim rows.
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
@@ -40,14 +40,14 @@ const SECTION_LABEL: Record<Section, string> = {
 
 const ORDER: Section[] = ["context", "skill", "prompt", "extension"];
 
-// Filas visibles del cuerpo dentro de la ventana (el resto con scroll).
+// Visible body rows inside the window (the rest via scroll).
 const BUDGET = 18;
 
 function agentDir(): string {
   return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
 }
 
-/** Como interactive-mode formatContextPath: relativo al cwd, o `~` fuera de él. */
+/** Like interactive-mode formatContextPath: relative to cwd, or `~` outside it. */
 function contextLabel(p: string, cwd: string): string {
   const abs = resolve(cwd, p);
   const rel = relative(resolve(cwd), abs);
@@ -67,7 +67,7 @@ function listExtensionFiles(cwd: string): string[] {
         if (f.endsWith(".ts") || f.endsWith(".js")) seen.add(f);
       }
     } catch {
-      /* ignora dirs ilegibles */
+      /* ignore unreadable dirs */
     }
   }
   return [...seen].sort((a, b) => a.localeCompare(b));
@@ -82,7 +82,7 @@ function collectNames(pi: ExtensionAPI, ctx: ExtensionCommandContext): Record<Se
       .sort((a, b) => a.path.localeCompare(b.path))
       .map((f) => contextLabel(f.path, ctx.cwd));
   } catch {
-    /* sin contexto disponible */
+    /* no context available */
   }
 
   const cmds = pi.getCommands?.() ?? [];
@@ -106,7 +106,7 @@ function padEndVisible(s: string, n: number): string {
 async function showResources(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
   const names = collectNames(pi, ctx);
 
-  // Sin TUI no hay overlay: resumen estilo original.
+  // No overlay without TUI: original-style summary.
   if (ctx.mode !== "tui" || !ctx.hasUI) {
     const text = ORDER.map((s) => {
       const list = names[s];
@@ -116,7 +116,7 @@ async function showResources(pi: ExtensionAPI, ctx: ExtensionCommandContext): Pr
     return;
   }
 
-  // Cuerpo estilo UI original: cabecera `[Nombre] (n)` + un recurso por línea.
+  // Original-UI-style body: `[Name] (n)` header + one resource per line.
   const body: Array<{ head: boolean; text: string }> = [];
   for (const s of ORDER) {
     const list = names[s];
@@ -166,7 +166,7 @@ async function showResources(pi: ExtensionAPI, ctx: ExtensionCommandContext): Pr
         const view = body.slice(scroll, scroll + BUDGET);
         view.forEach((ln, i) => {
           out.push(truncateToWidth(row(ln.head ? sec(` ${ln.text}`) : dim(`  ${ln.text}`)), W));
-          // Separador sutil entre secciones (no después de la última visible).
+          // Subtle separator between sections (not after the last visible one).
           const next = view[i + 1];
           if (next?.head) out.push(truncateToWidth(sepLine, W));
         });

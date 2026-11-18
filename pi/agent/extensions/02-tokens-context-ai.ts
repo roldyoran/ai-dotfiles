@@ -1,32 +1,32 @@
 /**
- * 02-tokens-context-ai — footer minimal: solo tokens de la conversación + barra de contexto.
+ * 02-tokens-context-ai — minimal footer: conversation tokens only + context bar.
  *
- * Cambia esta línea larga del footer original:
+ * Replaces this long line of the original footer:
  *   ↑22k ↓3.9k R158k CH96.2% $0.003 2.1%/1.0M (auto)
- * por esta versión compacta:
+ * with this compact version:
  *   ◈ 26k · █░░░░░░░░░ 2.1%/1.0M (auto) $0.003
  *
- * - `◈ 70k` = uso actual de la ventana de contexto (getContextUsage().tokens),
- *   el mismo número que mide la barra. El % se deriva de esos tokens/ventana
- *   en vez de fiarse de getContextUsage().percent, para que número y barra
- *   nunca discrepen (p. ej. ◈ 4.6k con 44.1%/1.0M visto con opencode-go).
- *   NO es suma acumulada: sumar `input`
- *   de cada mensaje multiplica de más porque cada input ya incluye el historial.
- * - `█░…` = barra de llenado del contexto total (getContextUsage().percent).
- * - `2.1%/1.0M (auto) $0.003` = mismo porcentaje/ventana/auto que el original
- *   más el gasto acumulado (`cost.total`, igual que `$0.003` del original).
- * - El resto queda igual: línea de pwd (+branch, +session) y modelo a la derecha.
+ * - `◈ 70k` = current context-window usage (getContextUsage().tokens),
+ *   the same number the bar measures. The % is derived from those tokens/window
+ *   instead of trusting getContextUsage().percent, so number and bar
+ *   never disagree (e.g. ◈ 4.6k vs 44.1%/1.0M seen with opencode-go).
+ *   It is NOT a cumulative sum: summing `input`
+ *   of every message overcounts because each input already includes history.
+ * - `█░…` = total context fill bar (getContextUsage().percent).
+ * - `2.1%/1.0M (auto) $0.003` = same percent/window/auto as the original
+ *   plus accumulated spend (`cost.total`, same as the original `$0.003`).
+ * - The rest stays the same: pwd line (+branch, +session) and model on the right.
  *
- * Comando:
- *   /tokens-context-ai — alterna entre versión original y mejorada (min)
+ * Command:
+ *   /tokens-context-ai — toggles between the original and the improved (min) version
  *
- * Patrones oficiales (no reinventar):
- * - docs/tui.md Pattern 6 → ctx.ui.setFooter(factory) con (tui, theme, footerData);
+ * Official patterns (do not reinvent):
+ * - docs/tui.md Pattern 6 → ctx.ui.setFooter(factory) with (tui, theme, footerData);
  *   footerData.getGitBranch()/getExtensionStatuses()/getAvailableProviderCount()/
- *   onBranchChange() son lo único no accesible por otro medio; ctx.ui.setFooter(undefined)
- *   restaura el footer original.
- * - examples/extensions/custom-footer.ts → totales desde sessionManager,
- *   truncateToWidth/visibleWidth para no exceder `width`.
+ *   onBranchChange() are the only things not reachable by other means; ctx.ui.setFooter(undefined)
+ *   restores the original footer.
+ * - examples/extensions/custom-footer.ts → totals from sessionManager,
+ *   truncateToWidth/visibleWidth to never exceed `width`.
  * - docs/extensions.md → ctx.getContextUsage() ({tokens, contextWindow, percent}),
  *   ctx.model (id/contextWindow/reasoning), pi.on("session_start"|"turn_end"|...) + tui.requestRender().
  */
@@ -41,23 +41,23 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 
 type Mode = "min" | "full";
 
-// Activa al arrancar: ves la mejora sin hacer nada; /footer vuelve al original.
+// Enabled at startup: you see the improvement without doing anything; /footer restores the original.
 let mode: Mode = "min";
 
-// TUI activo del footer custom (para refrescar en cada evento de sesión).
+// Live TUI of the custom footer (to refresh on every session event).
 let liveTui: { requestRender(): void } | null = null;
-// ctx más reciente (el capturado al instalar el footer queda viejo tras
-// cambios de sesión/modelo; el render siempre usa este). Sintetiza TUI+ctx.
+// Freshest ctx (the one captured when installing the footer goes stale after
+// session/model changes; rendering always uses this one). Bridges TUI+ctx.
 let currentCtx: ExtensionContext | null = null;
 const requestFooterRender = () => {
   try {
     liveTui?.requestRender();
   } catch {
-    /* TUI ya cerrado */
+    /* TUI already closed */
   }
 };
 
-/** Igual que FooterComponent.formatTokens en pi (footer.ts). */
+/** Same as FooterComponent.formatTokens in pi (footer.ts). */
 function fmt(n: number): string {
   if (n < 1000) return `${n}`;
   if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
@@ -66,7 +66,7 @@ function fmt(n: number): string {
   return `${Math.round(n / 1000000)}M`;
 }
 
-/** Igual que formatCwdForFooter en pi: ~ dentro de home, ruta tal cual fuera. */
+/** Same as formatCwdForFooter in pi: ~ inside home, path as-is outside. */
 function fmtCwd(cwd: string, home: string | undefined): string {
   if (!home) return cwd;
   const rc = resolve(cwd);
@@ -77,11 +77,11 @@ function fmtCwd(cwd: string, home: string | undefined): string {
   return rel === "" ? "~" : `~${sep}${rel}`;
 }
 
-/** Número a mostrar: tokens actuales de la ventana (lo mismo que mide la barra).
- * El % se deriva AQUÍ de tokens/ventana (misma fuente) para que número y barra
- * nunca puedan discrepar aunque pi devuelva un objeto inconsistente
- * (visto con provider opencode-go: ◈ 4.6k frente a 44.1%/1.0M).
- * Tras compaction tokens es null → cae a suma de outputs hasta la próxima respuesta. */
+/** Number to show: current window tokens (the same thing the bar measures).
+ * The % is derived HERE from tokens/window (same source) so number and bar
+ * can never disagree even if pi returns an inconsistent object
+ * (seen with provider opencode-go: ◈ 4.6k vs 44.1%/1.0M).
+ * After compaction tokens is null → falls back to summing outputs until the next response. */
 function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null; percent: number | null; window: number } {
   let reportedPercent: number | null = null;
   let win = 0;
@@ -101,7 +101,7 @@ function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null
       win = 0;
     }
   }
-  // Fuente única de verdad: el % sale de los mismos tokens que se muestran.
+  // Single source of truth: the % comes from the same tokens being shown.
   if (tokens !== null && tokens !== undefined) {
     const percent = win > 0 ? (tokens / win) * 100 : reportedPercent;
     return { text: fmt(tokens), tokens, percent, window: win };
@@ -111,8 +111,8 @@ function readUsage(ctx: ExtensionContext): { text: string; tokens: number | null
   return { text: fmt(fb), tokens: fb, percent, window: win };
 }
 
-/** Suma solo outputs (cada respuesta genera tokens nuevos, sin doble conteo).
- * Solo fallback cuando el contexto aún es desconocido (recién compactado). */
+/** Sums outputs only (each response generates new tokens, no double counting).
+ * Fallback only while context is still unknown (freshly compacted). */
 function outputFallback(ctx: ExtensionContext): number {
   let total = 0;
   try {
@@ -127,14 +127,14 @@ function outputFallback(ctx: ExtensionContext): number {
       }
     }
   } catch {
-    /* sesión aún sin entries */
+    /* session without entries yet */
   }
   return total;
 }
 
-/** Gasto acumulado igual que el footer original (footer.ts): suma cost.total de
- * usage + assistant + toolResult + branch_summary/compaction. Solo se muestra
- * si hay gasto o es suscripción (kimi-coding o modelRuntime). */
+/** Accumulated spend just like the original footer (footer.ts): sums cost.total of
+ * usage + assistant + toolResult + branch_summary/compaction. Only shown
+ * when there is spend or it is a subscription (kimi-coding or modelRuntime). */
 function readCost(ctx: ExtensionContext): { cost: number; usingSubscription: boolean; text: string } {
   let cost = 0;
   try {
@@ -155,7 +155,7 @@ function readCost(ctx: ExtensionContext): { cost: number; usingSubscription: boo
       }
     }
   } catch {
-    /* sesión aún sin entries */
+    /* session without entries yet */
   }
   const provider = (ctx as unknown as { model?: { provider?: string } }).model?.provider;
   let usingSubscription = provider === "kimi-coding";
@@ -165,7 +165,7 @@ function readCost(ctx: ExtensionContext): { cost: number; usingSubscription: boo
       usingSubscription = rt.isUsingSubscription(provider);
     }
   } catch {
-    /* sin modelRuntime */
+    /* no modelRuntime */
   }
   const text = cost > 0 || usingSubscription ? `$${cost.toFixed(3)}${usingSubscription ? " (sub)" : ""}` : "";
   return { cost, usingSubscription, text };
@@ -173,12 +173,12 @@ function readCost(ctx: ExtensionContext): { cost: number; usingSubscription: boo
 
 const BAR_W = 10;
 
-/** Sombreado parcial: misma familia que el vacío (░) para no dejar hueco.
- * Los bloques ▏▎▍ dejan fondo vacío y se ve un espacio raro entre
- * lo pintado y lo no pintado; ▒▓ son de celda completa y funden bien. */
+/** Partial shading: same family as the empty cell (░) so no gap is left.
+ * The ▏▎▍ blocks leave empty background and a weird space shows between
+ * painted and unpainted areas; ▒▓ are full-cell and blend cleanly. */
 const SHADES = ["", "▒", "▓"];
 
-/** Normaliza % en escala 0-100 (la que devuelve pi): recorta a [0,100]. null/inválido → 0. */
+/** Normalize % to the 0-100 scale (what pi returns): clamp to [0,100]. null/invalid → 0. */
 function normalizePct(pct: number | null): number {
   if (pct === null || pct === undefined || !Number.isFinite(pct) || pct <= 0) return 0;
   return Math.max(0, Math.min(100, pct));
@@ -188,20 +188,20 @@ function bar(pct: number | null, theme: { fg(c: string, s: string): string }): s
   const p = normalizePct(pct);
   const exact = (p / 100) * BAR_W;
   let full = Math.floor(exact);
-  // floor (no round): nunca sobre-representa. 2.1 % -> vacia en vez de 10 %.
+  // floor (no round): never over-represents. 2.1% → empty instead of 10%.
   let frac = Math.floor((exact - full) * 3);
   if (frac === 3) {
     full += 1;
     frac = 0;
   }
   full = Math.min(BAR_W, full);
-  // Color siempre relativo a la ventana actual, no a umbrales absolutos de tokens.
+  // Color always relative to the current window, never to absolute token thresholds.
   const color = p >= 90 ? "error" : p >= 70 ? "warning" : "success";
   let filledStr = "█".repeat(full);
   if (frac > 0 && full < BAR_W) filledStr += SHADES[frac];
   const usedCells = full + (frac > 0 && full < BAR_W ? 1 : 0);
   const empty = "░".repeat(Math.max(0, BAR_W - usedCells));
-  // Sin mínimo forzado: 0 % real → barra vacía (honesta). 2.1 % ya no pinta 10 %.
+  // No forced minimum: real 0% → empty bar (honest). 2.1% no longer paints 10%.
   if (!filledStr) return theme.fg("dim", empty);
   return theme.fg(color, filledStr) + theme.fg("dim", empty);
 }
@@ -212,13 +212,13 @@ function pwdText(ctx: ExtensionContext, footerData: { getGitBranch(): string | n
     const branch = footerData.getGitBranch();
     if (branch) pwd = `${pwd} (${branch})`;
   } catch {
-    /* sin git */
+    /* no git */
   }
   try {
     const name = ctx.sessionManager.getSessionName();
     if (name) pwd = `${pwd} • ${name}`;
   } catch {
-    /* sin nombre */
+    /* no name */
   }
   return pwd;
 }
@@ -242,7 +242,7 @@ function modelRight(
       if (leftW + 2 + visibleWidth(withProvider) <= width) return withProvider;
     }
   } catch {
-    /* sin conteo de providers */
+    /* no provider count */
   }
   return right;
 }
@@ -264,8 +264,8 @@ function applyMin(ctx: ExtensionContext): void {
       },
       invalidate() {},
       render(width: number): string[] {
-        // Usa el ctx más reciente: el capturado al instalar el footer queda
-        // con modelo/sesión viejos tras cambios de sesión o de modelo.
+        // Use the freshest ctx: the one captured when installing the footer
+        // holds a stale model/session after session or model changes.
         const c: ExtensionContext = currentCtx ?? ctx;
         const usage = readUsage(c);
         const pct = usage.percent;
@@ -280,17 +280,17 @@ function applyMin(ctx: ExtensionContext): void {
           return t ? ` ${t}` : "";
         })();
 
-        // Segmentos izquierdos; el bar se colorea aparte para no romper el dim.
+        // Left segments; the bar is colored separately so it never breaks the dim.
         let before = `◈ ${total} · `;
         let after = ` ${pctText}%/${winText}${auto}${costSuffix}`;
         let leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         if (leftW > width) {
-          after = ` ${pctText}%${auto}${costSuffix}`; // recorta ventana primero, nunca la barra
+          after = ` ${pctText}%${auto}${costSuffix}`; // trim the window first, never the bar
           leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         }
         if (leftW > width) {
           before = `◈ ${total} `;
-          after = costSuffix; // sin % en mínimo, pero el gasto se mantiene
+          after = costSuffix; // no % in minimal mode, but spend is kept
           leftW = visibleWidth(before) + BAR_W + visibleWidth(after);
         }
         const barStr = bar(pNorm, theme);
@@ -326,7 +326,7 @@ function applyMin(ctx: ExtensionContext): void {
             lines.push(truncateToWidth(txt, width, theme.fg("dim", "...")));
           }
         } catch {
-          /* sin statuses */
+          /* no statuses */
         }
         return lines;
       },
@@ -337,7 +337,7 @@ function applyMin(ctx: ExtensionContext): void {
 function applyFull(ctx: ExtensionContext): void {
   if (ctx.mode !== "tui" || !ctx.hasUI) return;
   liveTui = null;
-  ctx.ui.setFooter(undefined); // restaura el footer original de pi
+  ctx.ui.setFooter(undefined); // restore pi's original footer
 }
 
 function apply(ctx: ExtensionContext): void {
@@ -360,7 +360,7 @@ export default function (pi: ExtensionAPI) {
     handler: toggle,
   });
 
-  // Cada handler refresca currentCtx: el render lee modelo/sesión en vivo.
+  // Every handler refreshes currentCtx: rendering reads the live model/session.
   pi.on("session_start", async (_e, ctx) => {
     currentCtx = ctx;
     apply(ctx);
