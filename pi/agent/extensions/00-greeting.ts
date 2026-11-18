@@ -1,5 +1,5 @@
 /**
- * 00-greeting — 2 columnas: logo π grande + info. Insta suavizado + carpeta en el borde.
+ * 00-greeting — 2 columns: big π logo + info. Softened Insta + folder on the border.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -19,9 +19,9 @@ const THINKING: Record<string, { label: string; icon: string }> = {
   max: { label: "máximo", icon: "✦" },
 };
 
-// π de antes: barra superior gruesa + pata izquierda corta + derecha larga.
-// (sin espacios al final: se rellenan en código para que el ancho sea parejo
-// y ningún editor los recorte al guardar).
+// Legacy π: thick top bar + short left leg + long right leg.
+// (no trailing spaces: padded in code so every row has equal width
+// and no editor trims them on save).
 const PI = [
   "██████████████████████",
   "██████████████████████",
@@ -33,18 +33,18 @@ const PI = [
   "             █████",
 ];
 
-// Ancho parejo para todas las filas (gradiente y centrado uniformes).
+// Equal width for every row (uniform gradient and centering).
 const PIW = Math.max(...PI.map((r) => [...r].length));
 const PIN = PI.map((r) => r.padEnd(PIW, " "));
 
-// Colores de antes: Insta saturado +2 niveles (vivo, sin neón).
+// Pre-softening colors: Insta saturated +2 levels (vivid, no neon).
 const STOPS: Array<[number, number, number]> = [
-  [82, 36, 174], // morado vivo
-  [176, 53, 122], // magenta vivo
-  [197, 50, 100], // rosa rojizo vivo
-  [206, 35, 35], // rojo vivo
-  [224, 126, 77], // naranja arcilla vivo
-  [239, 183, 105], // amarillo arena vivo
+  [82, 36, 174], // vivid purple
+  [176, 53, 122], // vivid magenta
+  [197, 50, 100], // vivid reddish pink
+  [206, 35, 35], // vivid red
+  [224, 126, 77], // vivid clay orange
+  [239, 183, 105], // vivid sandy yellow
 ];
 
 function lerp(a: number, b: number, t: number): number {
@@ -52,7 +52,7 @@ function lerp(a: number, b: number, t: number): number {
 }
 
 function logoColor(x: number, y: number, w: number = PIW, h: number = PIN.length): [number, number, number] {
-  // Diagonal: morado arriba-izquierda → amarillo abajo-derecha.
+  // Diagonal: purple top-left → yellow bottom-right.
   const t = Math.min(1, Math.max(0, (x / Math.max(1, w - 1)) * 0.65 + (y / Math.max(1, h - 1)) * 0.35));
   const seg = t * (STOPS.length - 1);
   const i = Math.min(STOPS.length - 2, Math.floor(seg));
@@ -78,8 +78,8 @@ const paint = (line: string, y: number): string => {
   return out;
 };
 
-// Centrado del logo por conteo de caracteres (cada █ y espacio = 1 celda).
-// No usa truncate: el logo nunca se recorta, solo se rellena.
+// Center the logo by character count (each █ and space = 1 cell).
+// No truncate used: the logo is never clipped, only padded.
 function centerLogo(painted: string, n: number): string {
   if (PIW >= n) return painted;
   const left = Math.floor((n - PIW) / 2);
@@ -103,7 +103,7 @@ function countExtFiles(dirs: string[]): number {
       for (const f of readdirSync(dir)) {
         if (f.endsWith(".ts") || f.endsWith(".js")) seen.add(f.toLowerCase());
       }
-    } catch { /* ignora dirs ilegibles */ }
+    } catch { /* ignore unreadable dirs */ }
   }
   return seen.size;
 }
@@ -126,7 +126,7 @@ function countSkillsInDirs(dirs: string[]): number {
         }
         if (isDir || isMd) seen.add(e.name.toLowerCase());
       }
-    } catch { /* ignora dirs ilegibles */ }
+    } catch { /* ignore unreadable dirs */ }
   }
   return seen.size;
 }
@@ -139,12 +139,12 @@ function countPromptsInDirs(dirs: string[]): number {
       for (const f of readdirSync(dir)) {
         if (f.endsWith(".md")) seen.add(f.toLowerCase());
       }
-    } catch { /* ignora dirs ilegibles */ }
+    } catch { /* ignore unreadable dirs */ }
   }
   return seen.size;
 }
 
-// Sube desde cwd buscando <dir>/.agents/skills (como hace pi: ancestors).
+// Walk up from cwd looking for <dir>/.agents/skills (like pi does: ancestors).
 function ancestorAgentsSkillDirs(cwd: string): string[] {
   const out: string[] = [];
   let cur = cwd;
@@ -152,18 +152,18 @@ function ancestorAgentsSkillDirs(cwd: string): string[] {
     out.push(join(cur, ".agents", "skills"));
     const parent = join(cur, "..");
     const norm = parent === cur ? cur : join(parent);
-    // evita bucle en raíz: si ya no sube, para
+    // avoid looping at the root: if it no longer climbs, stop
     if (norm === cur || cur === "/" || /^[A-Z]:\\?$/.test(cur)) break;
     cur = norm;
-    // no subir más allá del home (los globales se cuentan aparte)
+    // never climb above home (global ones are counted separately)
     if (cur.length < homedir().length && homedir().startsWith(cur)) break;
   }
   return out;
 }
 
 function counts(pi: ExtensionAPI, ctx?: ExtensionContext): { ext: number; skills: number; prompts: number } {
-  // Fuente autoritativa: pi ya resolvió, mergeó y dedupó (trust + colisiones).
-  // source: "extension" | "prompt" | "skill" — es lo mismo que lista el TUI.
+  // Authoritative source: pi already resolved, merged and deduped (trust + collisions).
+  // source: "extension" | "prompt" | "skill" — same thing the TUI lists.
   try {
     const cmds = pi.getCommands?.() ?? [];
     if (cmds.length > 0) {
@@ -172,13 +172,13 @@ function counts(pi: ExtensionAPI, ctx?: ExtensionContext): { ext: number; skills
       const cwd = ctx?.cwd ?? process.cwd();
       const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
       const ext = countExtFiles([join(base, "extensions"), join(cwd, ".pi", "extensions")]);
-      // Si getCommands trae datos, úsalo aunque sea 0 (ej. proyecto sin skills es 0 real).
-      // Solo cae a fallback de FS si AMBOS están vacíos y podría ser carga temprana.
+      // If getCommands returns data, use it even when 0 (e.g. a project with no skills is a real 0).
+      // Only fall back to FS if BOTH are empty, which may mean early loading.
       if (skills.size > 0 || prompts.size > 0) return { ext, skills: skills.size, prompts: prompts.size };
       const fb = countsFromFs(cwd, base);
       return { ext, skills: fb.skills, prompts: fb.prompts };
     }
-  } catch { /* cae a filesystem */ }
+  } catch { /* fall back to filesystem */ }
   try {
     const cwd = ctx?.cwd ?? process.cwd();
     const base = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
@@ -188,7 +188,7 @@ function counts(pi: ExtensionAPI, ctx?: ExtensionContext): { ext: number; skills
   }
 }
 
-// Fallback filesystem: replica las raíces que pi/package-manager usa.
+// Filesystem fallback: mirrors the roots pi/package-manager uses.
 function countsFromFs(cwd: string, base: string, ctx?: ExtensionContext): { ext: number; skills: number; prompts: number } {
   const trusted = (() => {
     try { return ctx?.isProjectTrusted?.() ?? true; } catch { return true; }
@@ -250,18 +250,18 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
 
       const top = b("┌") + b("─".repeat(leftW)) + b("┬") + b("─".repeat(rightW)) + b("┐");
       const row = (left: string, right: string) => b("│") + left + b("│") + right + b("│");
-      // Divisor solo-derecha: comparte línea con una fila del logo para no cortarlo.
+      // Right-only divider: shares a line with a logo row so it never cuts through it.
       const rdiv = (left: string) => b("│") + left + b("├") + b("─".repeat(rightW)) + b("┤");
 
-      // Borde inferior con la carpeta incrustada.
+      // Bottom border with the folder embedded in it.
       const label = ` ${dir} `;
       const labelW = visibleWidth(label);
       const padL = Math.max(1, Math.floor((inner - labelW) / 2));
       const padR = Math.max(1, inner - labelW - padL);
       const bot = b("└") + b("─".repeat(padL)) + val(label) + b("─".repeat(padR)) + b("┘");
 
-      // Izquierda: saludo + logo + aire abajo (11 filas).
-      // Derecha: 3 secciones (Modelo / Esfuerzo / Sistema) con divisor propio.
+      // Left: greeting + logo + air below (11 rows).
+      // Right: 3 sections (Model / Effort / System) with their own divider.
       const L = [
         centerCell(val(greeting), leftW),
         centerCell("", leftW),
@@ -287,7 +287,7 @@ function paintHeader(pi: ExtensionAPI, ctx: ExtensionContext) {
       ];
 
       const lines: string[] = [""];
-      // Centra toda la tabla en pantalla (el contenido interno no cambia).
+      // Center the whole table on screen (inner content unchanged).
       const offset = Math.max(0, Math.floor((width - W) / 2));
       const pad = " ".repeat(offset);
       const out = (s: string) => pad + truncateToWidth(s, W);

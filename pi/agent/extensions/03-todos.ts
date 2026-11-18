@@ -356,7 +356,7 @@ async function showTodosTable(
   type Filter = "all" | Exclude<Status, "deleted">;
   const FILTERS: Filter[] = ["all", "pending", "in_progress", "completed"];
   const FILTER_LABEL: Record<Filter, string> = { all: "todas", pending: "pendientes", in_progress: "en progreso", completed: "completadas" };
-  // Creation order (#id ascending) — "en orden"; status views come from the filter.
+  // Creation order (#id ascending) — "in order"; status views come from the filter.
   // Rows/dep widths resolve per render from getLive() so the open table stays live.
 
   await ctx.ui.custom<void>(
@@ -391,7 +391,7 @@ async function showTodosTable(
             close();
             return;
           }
-          // `f` cycles the status filter: todas → pendientes → en progreso → completadas.
+          // `f` cycles the status filter: all → pending → in_progress → completed.
           if (data === "f" || data === "F") {
             filter = FILTERS[(FILTERS.indexOf(filter) + 1) % FILTERS.length];
             scroll = 0;
