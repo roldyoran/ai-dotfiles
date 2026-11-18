@@ -46,6 +46,14 @@
                 "weight": 1
               },
               "min": 90
+            },
+            {
+              "id": "always-notify",
+              "type": "block",
+              "size": { "px": 2 },
+              "content": {
+                "mod": "always-notify"
+              }
             }
           ]
         },
