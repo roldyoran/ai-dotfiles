@@ -1,13 +1,14 @@
 /**
- * 03-todos — session-scoped TODO system (session A: branch-aware, no disk).
+ * 03-todos — session-scoped TODO system (branch-aware, no disk) with an
+ * on-demand modal overlay.
  *
- *   /todos            — toggles the live panel (hide/show, no shortcut needed)
- *   /todos hide|show  — explicit collapse / expand
- *   /todos table      — full list in a scrollable overlay window (ordered by #id,
- *                       `f` filters by status, no ctrl+o needed)
- *   alt+t             — collapses / expands the live panel (ctrl+shift+t kept
- *                       as fallback; ctrl+shift combos don't reach pi in many
- *                       terminals — see docs/keybindings.md)
+ *   /todos [filtro]  — opens the Todos modal (overlay above everything).
+ *                      Optional initial filter: all | pending | waiting |
+ *                      in_progress | completed (Spanish aliases accepted).
+ *   /todos table     — alias (kept for muscle memory, opens the same modal).
+ *   alt+t            — opens the modal (ctrl+shift+t kept as fallback; many
+ *                      terminals swallow ctrl+shift combos — see
+ *                      docs/keybindings.md).
  *
  *   todo tool (for the model):
  *     create(subject, description?, blockedBy?)  — new pending task
@@ -22,17 +23,23 @@
  * official `todo.ts` example. Rebuilt from the session branch on
  * `session_start` / `session_compact` / `session_tree`.
  *
- * TUI design follows @juicesharp/rpiv-todo (pi.dev/packages/@juicesharp/rpiv-todo,
- * docs/overlay.md): persistent panel above the editor, tree rows, status
- * glyphs, overflow summary, completed fade-out, collapse shortcut.
+ * UI design: NO persistent widget. The main screen stays clean (zero render
+ * cost when closed); the modal is the single view, opened on demand.
  *
  * Official patterns used (no reinventing):
  * - docs/extensions.md → pi.registerTool (promptSnippet/promptGuidelines),
  *   pi.registerCommand, pi.registerShortcut, pi.on(...); state table
  *   (tool-result details = branch-sensitive state).
- * - docs/tui.md → setWidget factory + requestRender, theme from callback,
- *   truncateToWidth with "…" ellipsis; the live widget is the single view
- *   (no second overlay), and app.tools.expand (ctrl+o) shows the full list.
+ * - docs/tui.md → ctx.ui.custom() with `overlay: true` for a temporary screen
+ *   above existing content; component renders string[] within the supplied
+ *   width, caches layout by width+content and clears it in invalidate(),
+ *   truncates every line with truncateToWidth ("…" ellipsis), measures with
+ *   visibleWidth(), and repaints via the injected tui.requestRender()
+ *   (coalesced by the TUI). Theme comes from the factory callback — themed
+ *   strings are rebuilt on every render, never stored.
+ * - examples/extensions/todo.ts → class-free custom component closed via
+ *   done(); examples/extensions/overlay-qa-tests.ts → overlay sizing
+ *   (anchor center, width "70%", maxHeight "90%", margin 2).
  */
 
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -40,10 +47,9 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
-  ExtensionUIContext,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey, Text, truncateToWidth, visibleWidth, type TUI } from "@earendil-works/pi-tui";
+import { Key, matchesKey, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 type Status = "pending" | "in_progress" | "completed" | "deleted";
@@ -268,34 +274,45 @@ function reconstruct(ctx: ExtensionContext): void {
   }
 }
 
-// --- live panel (rpiv-todo style) -------------------------------------------
+// --- modal overlay (the single view, opened on demand) ----------------------
 
-const WIDGET_KEY = "todos";
-// Content-row budget (heading counts against it): at most 4 todo rows so the
-// panel stays compact — overflowing shows 3 rows + the `+N more` summary.
-// Floor of 3 mirrors rpiv-todo's getMaxWidgetLines(); no ceiling. Read fresh
-// per render so a future config file can plug in without touching the math.
-const DEFAULT_MAX_WIDGET_LINES = 5;
-function getMaxWidgetLines(): number {
-  return DEFAULT_MAX_WIDGET_LINES < 3 ? 12 : DEFAULT_MAX_WIDGET_LINES;
-}
-// Collapse hint always advertises the terminal-safe key. ctrl+shift+t stays
-// registered as a fallback but many terminals swallow ctrl+shift combos
-// (docs/keybindings.md: super/ctrl+shift need Kitty protocol or get
-// intercepted), so /todos hide|show never depends on a shortcut.
-const COLLAPSE_HINT = "alt+t to expand";
+// Visible body-row budget inside the modal viewport (headers + rows share it;
+// the rest is reachable via scroll). Small enough to fit short terminals,
+// large enough that most lists need no scrolling.
+const MODAL_BUDGET = 14;
 
-const ACTION_GLYPH: Record<TodoParamsType["action"], string> = {
-  create: "+",
-  update: "→",
-  delete: "×",
-  get: "›",
-  list: "☰",
-  clear: "∅",
+type Filter = "all" | "in_progress" | "pending" | "waiting" | "completed";
+const FILTERS: Filter[] = ["all", "in_progress", "pending", "waiting", "completed"];
+const FILTER_LABEL: Record<Filter, string> = {
+  all: "todas",
+  in_progress: "en progreso",
+  pending: "pendientes",
+  waiting: "en espera",
+  completed: "completadas",
+};
+const SECTION_TITLE: Record<Exclude<Filter, "all">, string> = {
+  in_progress: "En progreso",
+  waiting: "En espera",
+  pending: "Pendientes",
+  completed: "Completadas",
 };
 
-function overlayGlyph(status: Status, theme: Theme): string {
-  switch (status) {
+function padEndVisible(s: string, n: number): string {
+  const w = visibleWidth(s);
+  return w >= n ? s : s + " ".repeat(n - w);
+}
+
+/** Pending with at least one open (non-completed, non-deleted) dependency. */
+function isWaiting(t: Task): boolean {
+  if (t.status !== "pending" || t.blockedBy.length === 0) return false;
+  return t.blockedBy.some((d) => {
+    const dep = findTask(d);
+    return dep !== undefined && dep.status !== "completed" && dep.status !== "deleted";
+  });
+}
+
+function glyphFor(t: Task, theme: Theme): string {
+  switch (t.status) {
     case "pending":
       return theme.fg("dim", "○");
     case "in_progress":
@@ -307,42 +324,35 @@ function overlayGlyph(status: Status, theme: Theme): string {
   }
 }
 
-function formatRow(t: Task, theme: Theme, showId: boolean): string {
-  const glyph = overlayGlyph(t.status, theme);
-  const color = t.status === "in_progress" ? "accent" : t.status === "pending" ? "text" : "muted";
-  let subject = theme.fg(color, t.subject);
-  if (t.status === "completed" || t.status === "deleted") subject = theme.strikethrough(subject);
-  let line = glyph;
-  if (showId) line += ` ${theme.fg("dim", `#${t.id}`)}`;
-  line += ` ${subject}`;
-  if (t.status === "in_progress" && t.activeForm) line += ` ${theme.fg("muted", `(${t.activeForm})`)}`;
-  if (t.blockedBy.length > 0) line += ` ${theme.fg("muted", `⛓ ${t.blockedBy.map((d) => `#${d}`).join(",")}`)}`;
-  return line;
+function subjectFor(t: Task, theme: Theme): string {
+  if (t.status === "completed") return theme.strikethrough(theme.fg("muted", t.subject));
+  if (t.status === "in_progress") return theme.fg("accent", t.subject);
+  return theme.fg("text", t.subject);
 }
 
-// Visible body rows inside the table window (rest via scroll).
-const TABLE_BUDGET = 14;
+// Re-entrancy guard: the modal owns input focus while open, so a second
+// open (shortcut while modal visible, double /todos) is ignored instead of
+// stacking overlays.
+let modalOpen = false;
+// Live-refresh hook for the open modal (set by its factory, cleared on close).
+// tool_execution_end pokes it so the modal repaints on every todo change.
+let modalRefresh: (() => void) | undefined;
 
-function padEndVisible(s: string, n: number): string {
-  const w = visibleWidth(s);
-  return w >= n ? s : s + " ".repeat(n - w);
-}
-
-// Refresh hook for the open table window (set by its factory, cleared on close).
-// tool_execution_end pokes it so the table re-renders live on every todo change.
-let tableRefresh: (() => void) | undefined;
-
-/** Full-list overlay window (docs/tui.md: ctx.ui.custom temporary screen).
- *  Bordered table like 01-resources, one row per todo — no row budget,
- *  scroll with ↑↓/PgUp/PgDn/Home/End, `f` filters by status, close with
- *  esc/enter/space/q. Live: re-reads state on every render and repaints on
- *  each todo tool change while open. */
-async function showTodosTable(
+/**
+ * Full-list modal (docs/tui.md: ctx.ui.custom temporary screen with
+ * overlay:true — floats above everything, keeps input focus until closed).
+ * Grouped by state so you can see at a glance what's running, what's
+ * waiting, what's pending and what's done. Live: re-reads state on every
+ * render and repaints on each todo tool change while open.
+ */
+async function openTodosModal(
   ctx: ExtensionCommandContext,
   getLive: () => Task[],
+  initialFilter: Filter = "all",
 ): Promise<void> {
-  const live = getLive();
-  if (ctx.mode !== "tui" || !ctx.hasUI) {
+  if (modalOpen) return;
+  if (!ctx.hasUI || ctx.mode !== "tui" || typeof ctx.ui?.custom !== "function") {
+    const live = getLive();
     const done = live.filter((t) => t.status === "completed").length;
     ctx.ui.notify(
       live.length === 0
@@ -353,69 +363,83 @@ async function showTodosTable(
     return;
   }
 
-  type Filter = "all" | Exclude<Status, "deleted">;
-  const FILTERS: Filter[] = ["all", "pending", "in_progress", "completed"];
-  const FILTER_LABEL: Record<Filter, string> = { all: "todas", pending: "pendientes", in_progress: "en progreso", completed: "completadas" };
-  // Creation order (#id ascending) — "in order"; status views come from the filter.
-  // Rows/dep widths resolve per render from getLive() so the open table stays live.
-
-  await ctx.ui.custom<void>(
+  modalOpen = true;
+  try {
+    await ctx.ui.custom<void>(
     (tui, theme, _kb, doneFn) => {
-      tableRefresh = () => tui.requestRender();
+      let scroll = 0;
+      let filter: Filter = initialFilter;
+      // Render cache (docs/tui.md: cache layout by width+content, clear in
+      // invalidate() — parents reuse an unchanged array without re-reading).
+      let cachedWidth: number | undefined;
+      let cachedKey: string | undefined;
+      let cachedLines: string[] | undefined;
+      const invalidate = () => {
+        cachedWidth = undefined;
+        cachedKey = undefined;
+        cachedLines = undefined;
+      };
+      modalRefresh = () => {
+        invalidate();
+        tui.requestRender();
+      };
       const close = () => {
-        tableRefresh = undefined;
+        modalRefresh = undefined;
         doneFn(undefined);
       };
-      let scroll = 0;
-      let filter: Filter = "all";
       const snapshot = (): Task[] => [...getLive()].sort((a, b) => a.id - b.id);
-      const maxScrollFor = (n: number): number => Math.max(0, n - TABLE_BUDGET);
-      const glyphFor = (t: Task): string => {
-        switch (t.status) {
-          case "pending": return theme.fg("dim", "○");
-          case "in_progress": return theme.fg("warning", "◐");
-          case "completed": return theme.fg("success", "✓");
-          case "deleted": return theme.fg("error", "✗");
-        }
-      };
-      const subjectFor = (t: Task): string => {
-        if (t.status === "completed") return theme.strikethrough(theme.fg("muted", t.subject));
-        if (t.status === "in_progress") return theme.fg("accent", t.subject);
-        return theme.fg("text", t.subject);
-      };
+      const groupOf = (t: Task): Exclude<Filter, "all"> =>
+        t.status === "in_progress" ? "in_progress" : t.status === "completed" ? "completed" : isWaiting(t) ? "waiting" : "pending";
 
       return {
-        invalidate() {},
+        invalidate,
         handleInput(data: string) {
           if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter) || matchesKey(data, Key.space) || data === "q") {
             close();
             return;
           }
-          // `f` cycles the status filter: all → pending → in_progress → completed.
+          // `f` cycles the status filter.
           if (data === "f" || data === "F") {
             filter = FILTERS[(FILTERS.indexOf(filter) + 1) % FILTERS.length];
             scroll = 0;
+            invalidate();
             tui.requestRender();
             return;
           }
-          const maxScroll = maxScrollFor(snapshot().filter((t) => filter === "all" || t.status === filter).length);
+          const live = snapshot();
+          const rows = filter === "all" ? live : live.filter((t) => groupOf(t) === filter);
+          // In "all" view, section headers share the scroll space.
+          const groups: Array<Exclude<Filter, "all">> = ["in_progress", "waiting", "pending", "completed"];
+          const bodyLen =
+            filter === "all"
+              ? groups.reduce((n, g) => n + (live.some((t) => groupOf(t) === g) ? 1 + live.filter((t) => groupOf(t) === g).length : 0), 0)
+              : rows.length;
+          const maxScroll = Math.max(0, bodyLen - MODAL_BUDGET);
           let next = scroll;
           if (matchesKey(data, Key.up)) next = scroll - 1;
           else if (matchesKey(data, Key.down)) next = scroll + 1;
-          else if (matchesKey(data, Key.pageUp)) next = scroll - TABLE_BUDGET;
-          else if (matchesKey(data, Key.pageDown)) next = scroll + TABLE_BUDGET;
+          else if (matchesKey(data, Key.pageUp)) next = scroll - MODAL_BUDGET;
+          else if (matchesKey(data, Key.pageDown)) next = scroll + MODAL_BUDGET;
           else if (matchesKey(data, Key.home)) next = 0;
           else if (matchesKey(data, Key.end)) next = maxScroll;
           else return;
           scroll = Math.min(maxScroll, Math.max(0, next));
+          invalidate();
           tui.requestRender();
         },
         render(width: number): string[] {
-          // Fresh state on every render — this is what makes the open table live.
+          // Fresh state on every render — this is what makes the open modal live.
           const live = snapshot();
-          const rows = filter === "all" ? live : live.filter((t) => t.status === filter);
-          scroll = Math.min(scroll, Math.max(0, rows.length - TABLE_BUDGET));
-          const done = live.filter((t) => t.status === "completed").length;
+          const rows = filter === "all" ? live : live.filter((t) => groupOf(t) === filter);
+          const groups: Array<Exclude<Filter, "all">> = ["in_progress", "waiting", "pending", "completed"];
+          const counts = new Map<Exclude<Filter, "all">, number>();
+          for (const g of groups) counts.set(g, live.filter((t) => groupOf(t) === g).length);
+
+          // Cheap content signature: rebuild cached lines only when the
+          // visible state actually changed (tool updates) or view moved.
+          const sig = `${live.map((t) => `${t.id}:${t.status}:${t.subject}:${t.activeForm ?? ""}:${t.blockedBy.join(",")}`).join("|")}#${scroll}#${filter}`;
+          if (cachedLines && cachedWidth === width && cachedKey === sig) return cachedLines;
+
           const depTexts = new Map<number, string>();
           for (const t of live) if (t.blockedBy.length > 0) depTexts.set(t.id, `⛓ ${t.blockedBy.map((d) => `#${d}`).join(",")}`);
           const depW = depTexts.size > 0 ? Math.max(4, ...[...depTexts.values()].map((s) => visibleWidth(s))) : 0;
@@ -424,40 +448,80 @@ async function showTodosTable(
           const b = (s: string) => theme.fg("borderAccent", s);
           const title = (s: string) => theme.fg("accent", theme.bold(s));
           const dim = (s: string) => theme.fg("dim", s);
+          const mut = (s: string) => theme.fg("muted", s);
           const sep = dim(" │ ");
           // ` #12 │ ◐ │ subject │ ⛓ #1` → titleW fills the rest.
           const titleW = Math.max(10, inner - 1 - 4 - 3 - 1 - 3 - (depW > 0 ? 3 + depW : 0));
           const cell = (s: string, n: number) => padEndVisible(truncateToWidth(s, n, "…"), n);
-          const titleText = filter === "all" ? ` Todos (${done}/${live.length}) ` : ` Todos (${done}/${live.length}) · ${FILTER_LABEL[filter]} `;
+          const done = counts.get("completed") ?? 0;
+          const active = (counts.get("in_progress") ?? 0) + (counts.get("waiting") ?? 0) + (counts.get("pending") ?? 0);
+          const titleText =
+            filter === "all"
+              ? ` Todos (${done}/${live.length}) · ${active} activas `
+              : ` Todos (${done}/${live.length}) · ${FILTER_LABEL[filter]} `;
           const top = b("┌") + b("─") + title(titleText) + b("─".repeat(Math.max(1, inner - 1 - visibleWidth(titleText)))) + b("┐");
           const mid = b("├") + b("─".repeat(inner)) + b("┤");
           const bot = b("└") + b("─".repeat(inner)) + b("┘");
           const rowLine = (s: string) => b("│") + padEndVisible(truncateToWidth(s, inner), inner) + b("│");
-          const head = ` ${cell(dim("#"), 4)}${sep}${cell(dim("E"), 1)}${sep}${cell(dim("Título"), titleW)}${depW > 0 ? `${sep}${cell(dim("Dep"), depW)}` : ""}`;
+          const head = ` ${cell(mut("#"), 4)}${sep}${cell(mut("E"), 1)}${sep}${cell(mut("Título"), titleW)}${depW > 0 ? `${sep}${cell(mut("Dep"), depW)}` : ""}`;
 
+          const body: string[] = [];
+          if (filter === "all") {
+            for (const g of groups) {
+              const items = live.filter((t) => groupOf(t) === g);
+              if (items.length === 0) continue;
+              body.push(` ${mut(`▸ ${SECTION_TITLE[g]} (${items.length})`)}`);
+              for (const t of items) {
+                body.push(
+                  ` ${cell(theme.fg("accent", `#${t.id}`), 4)}${sep}${cell(glyphFor(t, theme), 1)}${sep}${cell(
+                    `${subjectFor(t, theme)}${t.status === "in_progress" && t.activeForm ? ` ${theme.fg("muted", `(${t.activeForm})`)}` : ""}`,
+                    titleW,
+                  )}${depW > 0 ? `${sep}${cell(mut(depTexts.get(t.id) ?? ""), depW)}` : ""}`,
+                );
+              }
+            }
+          } else {
+            for (const t of rows) {
+              body.push(
+                ` ${cell(theme.fg("accent", `#${t.id}`), 4)}${sep}${cell(glyphFor(t, theme), 1)}${sep}${cell(
+                  `${subjectFor(t, theme)}${t.status === "in_progress" && t.activeForm ? ` ${theme.fg("muted", `(${t.activeForm})`)}` : ""}`,
+                  titleW,
+                )}${depW > 0 ? `${sep}${cell(mut(depTexts.get(t.id) ?? ""), depW)}` : ""}`,
+              );
+            }
+          }
+
+          scroll = Math.min(scroll, Math.max(0, body.length - MODAL_BUDGET));
+          const view = body.slice(scroll, scroll + MODAL_BUDGET);
           const out: string[] = [truncateToWidth(top, W), truncateToWidth(rowLine(head), W), truncateToWidth(mid, W)];
-          const view = rows.slice(scroll, scroll + TABLE_BUDGET);
-          if (view.length === 0)
+          if (view.length === 0) {
             out.push(
               truncateToWidth(
-                rowLine(dim(live.length === 0 ? "  No todos yet. Ask the agent to add some!" : "  Sin todos en este filtro — pulsa f para cambiar")),
+                rowLine(mut(live.length === 0 ? "  No hay todos todavía. Pídele al agente que añada alguno." : "  Sin todos en este filtro — pulsa f para cambiar")),
                 W,
               ),
             );
-          for (const t of view) {
-            const line = ` ${cell(theme.fg("accent", `#${t.id}`), 4)}${sep}${cell(glyphFor(t), 1)}${sep}${cell(subjectFor(t), titleW)}${
-              depW > 0 ? `${sep}${cell(dim(depTexts.get(t.id) ?? ""), depW)}` : ""
-            }`;
-            out.push(truncateToWidth(rowLine(line), W));
+          } else {
+            for (const line of view) out.push(truncateToWidth(rowLine(line), W));
           }
-          const remaining = Math.max(0, rows.length - scroll - TABLE_BUDGET);
+          const remaining = Math.max(0, body.length - scroll - MODAL_BUDGET);
           out.push(
             truncateToWidth(
-              rowLine(dim(remaining > 0 ? `  ↓ ${remaining} más · f filtro · ↑↓ scroll · q cerrar` : `  f filtro · ↑↓ scroll · q cerrar · ${done}/${live.length} completed`)),
+              rowLine(
+                mut(
+                  remaining > 0
+                    ? `  ↓ ${remaining} más · f filtro (${FILTER_LABEL[filter]}) · ↑↓ scroll · q cerrar`
+                    : `  f filtro (${FILTER_LABEL[filter]}) · ↑↓ scroll · q cerrar · ${done}/${live.length} completadas`,
+                ),
+              ),
               W,
             ),
           );
           out.push(truncateToWidth(bot, W));
+
+          cachedWidth = width;
+          cachedKey = sig;
+          cachedLines = out;
           return out;
         },
       };
@@ -467,178 +531,70 @@ async function showTodosTable(
       overlayOptions: { anchor: "center", width: "70%", maxHeight: "90%", margin: 2 },
     },
   );
+  } finally {
+    modalOpen = false;
+    modalRefresh = undefined;
+  }
+}
+
+const ACTION_GLYPH: Record<TodoParamsType["action"], string> = {
+  create: "+",
+  update: "→",
+  delete: "×",
+  get: "›",
+  list: "☰",
+  clear: "∅",
+};
+
+function parseFilterArg(args: string): Filter {
+  const a = args.trim().toLowerCase();
+  if (a === "in_progress" || a === "progress" || a === "progreso" || a === "active" || a === "activa") return "in_progress";
+  if (a === "pending" || a === "pendiente" || a === "pendientes") return "pending";
+  if (a === "waiting" || a === "espera" || a === "blocked" || a === "bloqueada" || a === "bloqueadas") return "waiting";
+  if (a === "completed" || a === "complete" || a === "done" || a === "completada" || a === "completadas" || a === "terminadas") return "completed";
+  return "all";
 }
 
 export default function (pi: ExtensionAPI) {
-  let uiCtx: ExtensionUIContext | undefined;
-  let widgetRegistered = false;
-  let tui: TUI | undefined;
-  let collapsed = false;
-  // Completed fade-out: rows stay for the rest of the turn, hide on next turn.
-  const pendingHide = new Set<number>();
-  const hiddenCompleted = new Set<number>();
-  // Detects clear() (nextId drops back to 1) so stale fade flags can't survive it.
-  let lastNextId: number | undefined;
-
-  const visibleTasks = (): Task[] =>
-    tasks.filter((t) => t.status !== "deleted" && !hiddenCompleted.has(t.id));
-
-  function renderPanel(theme: Theme, width: number): string[] {
-    const live = visibleTasks();
-    if (live.length === 0) return [];
-    const trunc = (s: string) => truncateToWidth(s, width, "…");
-    const done = live.filter((t) => t.status === "completed").length;
-    const hasActive = live.some((t) => t.status === "pending" || t.status === "in_progress");
-    const color = hasActive ? "accent" : "dim";
-    const heading = trunc(`${theme.fg(color, hasActive ? "●" : "○")} ${theme.fg(color, `Todos (${done}/${live.length})`)}`);
-
-    if (collapsed) {
-      return [heading, trunc(`${theme.fg("dim", "└─")} ${theme.fg("dim", COLLAPSE_HINT)}`), ""];
-    }
-
-    const showIds = live.some((t) => t.blockedBy.length > 0);
-    // Track newly displayed completed rows for fade-out on next turn.
-    for (const t of live) {
-      if (t.status === "completed" && !pendingHide.has(t.id) && !hiddenCompleted.has(t.id)) pendingHide.add(t.id);
-    }
-
-    // Pi's built-in app.tools.expand (ctrl+o) shows the full list on demand;
-    // otherwise the heading + budget keep the panel compact. Optional chaining
-    // keeps compat with hosts predating getToolsExpanded().
-    const expanded =
-      (uiCtx as { getToolsExpanded?: () => boolean } | undefined)?.getToolsExpanded?.() === true;
-    const budget = expanded ? live.length : getMaxWidgetLines() - 1; // heading counts against the budget
-    const completed = live.filter((t) => t.status === "completed");
-    const unfinished = live.filter((t) => t.status !== "completed");
-    // Drop completed first (newest first — oldest completed stays longest).
-    let shownCompleted = completed;
-    let hiddenCompletedCount = 0;
-    if (completed.length + unfinished.length > budget) {
-      const roomForCompleted = Math.max(0, budget - unfinished.length);
-      hiddenCompletedCount = completed.length - roomForCompleted;
-      shownCompleted = completed.slice(0, roomForCompleted);
-    }
-    let shown = [...shownCompleted, ...unfinished];
-    let truncatedTail = 0;
-    if (shown.length > budget) {
-      // Unfinished alone still overflows: reserve one row for the summary.
-      const keep = unfinished.slice(0, budget - shownCompleted.length - 1);
-      truncatedTail = unfinished.length - keep.length;
-      shown = [...shownCompleted, ...keep];
-    }
-
-    const lines = [heading];
-    for (const t of shown) lines.push(trunc(`${theme.fg("dim", "├─")} ${formatRow(t, theme, showIds)}`));
-    if (hiddenCompletedCount === 0 && truncatedTail === 0) {
-      lines[lines.length - 1] = lines[lines.length - 1].replace("├─", "└─");
-    } else {
-      const parts: string[] = [];
-      if (hiddenCompletedCount > 0) parts.push(`${hiddenCompletedCount} completed`);
-      if (truncatedTail > 0) parts.push(`${truncatedTail} pending`);
-      const total = hiddenCompletedCount + truncatedTail;
-      lines.push(trunc(`${theme.fg("dim", "└─")} ${theme.fg("dim", `+${total} more (${parts.join(", ")})`)}`));
-    }
-    lines.push(""); // breathing room above the editor box
-    return lines;
-  }
-
-  function update(resetFade = false): void {
-    if (lastNextId !== undefined && nextId < lastNextId) {
-      // clear() reset the id sequence — drop fade tracking with it.
-      pendingHide.clear();
-      hiddenCompleted.clear();
-    }
-    lastNextId = nextId;
-    if (resetFade) {
-      pendingHide.clear();
-      hiddenCompleted.clear();
-    }
-    if (!uiCtx) return;
-    if (visibleTasks().length === 0) {
-      if (widgetRegistered) {
-        uiCtx.setWidget(WIDGET_KEY, undefined);
-        widgetRegistered = false;
-        tui = undefined;
-      }
-      return;
-    }
-    if (!widgetRegistered) {
-      uiCtx.setWidget(
-        WIDGET_KEY,
-        (t, factoryTheme) => {
-          tui = t;
-          return {
-            render: (width: number) => renderPanel(uiCtx?.theme ?? factoryTheme, width),
-            invalidate: () => {},
-          };
-        },
-        { placement: "aboveEditor" },
-      );
-      widgetRegistered = true;
-    } else {
-      tui?.requestRender();
-    }
-  }
-
-  function dispose(): void {
-    try {
-      uiCtx?.setWidget(WIDGET_KEY, undefined);
-    } catch {
-      /* stale ui proxy on shutdown — safe to ignore */
-    }
-    widgetRegistered = false;
-    tui = undefined;
-    uiCtx = undefined;
-  }
-
   pi.on("session_start", async (_event, ctx) => {
     reconstruct(ctx);
-    if (!ctx.hasUI) return;
-    uiCtx = ctx.ui;
-    await update(true);
   });
   pi.on("session_compact", async (_event, ctx) => {
     reconstruct(ctx);
-    await update(true);
   });
   pi.on("session_tree", async (_event, ctx) => {
     reconstruct(ctx);
-    await update(true);
   });
-  pi.on("session_shutdown", async () => dispose());
+  pi.on("session_shutdown", async () => {
+    modalOpen = false;
+    modalRefresh = undefined;
+  });
 
   // Branch is stale in message_end — refresh here, reading live module state.
-  // Also repaints the open /todos table so it stays live while visible.
+  // Also repaints the open modal so it stays live while visible.
   pi.on("tool_execution_end", async (event) => {
     if (event.toolName !== "todo" || event.isError) return;
-    await update();
-    tableRefresh?.();
-  });
-
-  // Completed rows fade at the start of the next turn.
-  pi.on("agent_start", async () => {
-    if (pendingHide.size === 0) return;
-    for (const id of pendingHide) hiddenCompleted.add(id);
-    pendingHide.clear();
-    await update();
+    modalRefresh?.();
   });
 
   // Terminal-safe primary (alt combos arrive as ESC-prefix almost everywhere)
   // plus the old ctrl+shift+t as fallback where the terminal does deliver it.
-  // Forced redraw: collapsing changes the widget height, so request a shape
-  // change, not a plain refresh.
-  const toggleCollapse = (ctx: { hasUI: boolean }) => {
-    if (!ctx.hasUI || !widgetRegistered) return;
-    collapsed = !collapsed;
-    (tui?.requestRender as ((forced?: boolean) => void) | undefined)?.(true);
+  // Shortcut contexts carry the same ui surface; the cast only bridges the
+  // command-context typing — the runtime guard inside openTodosModal applies.
+  const openFromShortcut = async (ctx: { hasUI: boolean }) => {
+    if (!ctx.hasUI || modalOpen) return;
+    await openTodosModal(
+      ctx as unknown as ExtensionCommandContext,
+      () => tasks.filter((t) => t.status !== "deleted"),
+    );
   };
   pi.registerShortcut(Key.alt("t"), {
-    description: "Collapse or expand the todo panel",
-    handler: toggleCollapse,
+    description: "Open the todos modal",
+    handler: openFromShortcut,
   });
   pi.registerShortcut(Key.ctrlShift("t"), {
-    description: "Collapse or expand the todo panel (fallback)",
-    handler: toggleCollapse,
+    description: "Open the todos modal (fallback)",
+    handler: openFromShortcut,
   });
 
   pi.registerTool({
@@ -701,33 +657,11 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("todos", {
-    description: "Toggle the live todo panel; /todos hide|show for explicit state; /todos table for the full list window",
+    description: "Open the todos modal (overlay); optional filter: all | pending | waiting | in_progress | completed",
     handler: async (args, ctx) => {
-      const sub = args.trim().toLowerCase();
-      if (sub === "table" || sub === "all") {
-        await showTodosTable(ctx, () => tasks.filter((t) => t.status !== "deleted"));
-        return;
-      }
-      const redraw = () =>
-        (tui?.requestRender as ((forced?: boolean) => void) | undefined)?.(true);
-      if (sub === "hide" || sub === "collapse" || sub === "off") {
-        collapsed = true;
-        redraw();
-        return;
-      }
-      if (sub === "show" || sub === "expand" || sub === "on") {
-        collapsed = false;
-        redraw();
-        return;
-      }
-      // Bare /todos toggles: the live widget above the editor is the only
-      // view — no second overlay, no notify spam.
-      if (!ctx.hasUI) {
-        ctx.ui.notify("/todos requires interactive mode", "error");
-        return;
-      }
-      collapsed = !collapsed;
-      redraw();
+      // `table`/`all` kept as aliases; legacy hide|show verbs just open it.
+      const initial = parseFilterArg(args);
+      await openTodosModal(ctx, () => tasks.filter((t) => t.status !== "deleted"), initial);
     },
   });
 }
