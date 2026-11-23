@@ -54,6 +54,14 @@
               "content": {
                 "mod": "always-notify"
               }
+            },
+            {
+              "id": "water-reminder",
+              "type": "block",
+              "size": { "px": 2 },
+              "content": {
+                "mod": "water-reminder"
+              }
             }
           ]
         },

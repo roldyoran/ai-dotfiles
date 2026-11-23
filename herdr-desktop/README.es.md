@@ -19,11 +19,13 @@ herdr-desktop/
   mods/roldy-tabs/win-*.svg       # botones de ventana (del clon)
   mods/always-notify/main.js    # sonido + toast en CADA transición del agente
   mods/always-notify/mod.json
+  mods/water-reminder/main.js + drop.svg  # recordatorio de agua cada 16 min (timer + toast)
+  mods/water-reminder/mod.json
   backgrounds/mountain_1.jpg    # fondo EN USO (cover)
   backgrounds/imagen-back-2.jpg # fondo alternativo
 ```
 
-Respaldado: solo el tema custom (layout + 2 mods + fondos en uso).
+Respaldado: solo el tema custom (layout + 3 mods + fondos en uso).
 No respaldado (local de la máquina, se edita en la app):
 
 - `settings.json` — zoom, sonidos, fuentes, apariencia, telemetría (ver Sonidos y ajustes)
@@ -72,6 +74,18 @@ Clic en X cierra con `tab.close { id }` (stopPropagation para no seleccionar ant
 ### `always-notify` (83 líneas, `place: none`)
 
 Suena + toast en **cada** transición del agente, aun mirando la app.
+
+### `water-reminder` (`place: none`)
+
+Recordatorio de agua cada 16 min (cambia `MINUTES` arriba de `main.js`).
+Timer revisa cada 60s, publica un toast con gota azul propia (`drop.svg`),
+mensaje rotativo, 60s en pantalla, más `playSound("done")`
+y reprograma. Clic en el aviso = posponer 10 min
+(`water-reminder.snooze` vía `nextCommand`); `water-reminder.preview` muestra uno
+sin mover el timer. Respeta mute global para el sonido (el
+toast igual sale). Solo corre con Herdr abierto — cerrar la ventana lo pausa.
+Estado en `shared.json`: `water-reminder.next/alive/last/count`.
+Bloque en layout `size: { px: 2 }`, no `hidden` (igual que always-notify).
 El built-in solo toca sonidos `blocked`/`done` (y pone el toast) cuando **no** miras;
 si lo miras cambia `done → idle` en silencio.
 
@@ -139,6 +153,8 @@ Copy-Item .\herdr-desktop\mods\roldy-tabs\* $env:USERPROFILE\.config\herdr-app\m
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\always-notify | Out-Null
 Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\herdr-app\mods\always-notify\main.js -Force
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\water-reminder | Out-Null
+Copy-Item .\herdr-desktop\mods\water-reminder\* $env:USERPROFILE\.config\herdr-app\mods\water-reminder\ -Force
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\always-notify
 herdr-app do layout.switch --name "roldy-theme"
@@ -149,11 +165,13 @@ Unix (mismas rutas bajo `~/.config/herdr-app`):
 
 ```sh
 cp herdr-desktop/layouts/roldy-theme.json ~/.config/herdr-app/layouts/roldy-theme.json
-mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify
+mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder
 cp herdr-desktop/backgrounds/* ~/.config/herdr-app/backgrounds/
 cp herdr-desktop/mods/roldy-tabs/* ~/.config/herdr-app/mods/roldy-tabs/
 cp herdr-desktop/mods/always-notify/main.js herdr-desktop/mods/always-notify/mod.json ~/.config/herdr-app/mods/always-notify/
+cp herdr-desktop/mods/water-reminder/* ~/.config/herdr-app/mods/water-reminder/
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs
+herdr-app check ~/.config/herdr-app/mods/water-reminder
 herdr-app check ~/.config/herdr-app/mods/always-notify
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
@@ -162,6 +180,7 @@ herdr-app status
 ## Aplicar y verificar
 
 ```sh
+herdr-app check ~/.config/herdr-app/mods/water-reminder    # debe pasar; timer solo, sin efectos
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs       # debe pasar; X en cada tab
 herdr-app check ~/.config/herdr-app/mods/always-notify   # debe pasar; sin efectos (checking())
 herdr-app status        # layout roldy-theme, sin errores, overlays []
@@ -171,6 +190,8 @@ herdr-app shot /tmp/herdr.png   # chequeo visual (sirve tapado/minimizado)
 
 - guardar un mod recarga en caliente cada copia; si falla conserva la versión vieja
   y lo reporta en `status` + archivo `<name>.error`
+- confirma que `water-reminder` corre: `shared.json` debe tener `water-reminder.alive`
+  (heartbeat cada 60s) y `water-reminder.next` — si falta, su bloque no está instanciado
 - confirma que `always-notify` corre: `shared.json` debe tener `always-notify.alive`
   (heartbeat cada 2s) — si falta, su bloque no está instanciado en el layout
 - prueba sonido: deja el tab del agente visible, deja que otro termine / te necesite →
