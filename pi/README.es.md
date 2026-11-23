@@ -25,6 +25,15 @@ cd pi/scripts
 ./install.ps1
 ```
 
+## Reinstalación
+
+Las reinstalaciones usan `-Force` por defecto: los archivos reales en `~/.pi`
+se respaldan a `.bak-*` (se guardan los últimos 2) y se reemplazan con enlaces a este repo.
+
+```powershell
+./install.ps1 -Force
+```
+
 ## Extensiones
 
 | Archivo | Comando | Qué hace |
