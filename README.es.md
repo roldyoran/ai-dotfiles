@@ -27,7 +27,7 @@ ai-dotfiles/
 ├── herdr-desktop/         # Backup espejo de ~/.config/herdr-app (roldy-theme)
 │   ├── README.md / README.es.md
 │   ├── layouts/roldy-theme.json        # layout activo (clon de main, v0.1.15)
-│   ├── mods/roldy-spaces/              # sidebar de spaces (clon del spaces original)
+│   ├── mods/roldy-tabs/                 # barra de tabs (clon de tabs, X siempre visible)
 │   ├── mods/always-notify/             # sonido + toast en CADA transición del agente
 │   └── backgrounds/                    # mountain_1.jpg (en uso) + imagen-back-2.jpg
 ├── claude/                # (futuro)
@@ -91,7 +91,7 @@ Backup del setup personalizado de Herdr Desktop. La app viva lee desde `~/.confi
 | Pieza | Archivo | Resumen |
 |-------|---------|---------|
 | Layout | `layouts/roldy-theme.json` | Clon de `main`. Acento `#f59e0b`, neutral-950 `#0a0a0a`, superficies al 80% de opacidad (menús 100% opacos), `mountain_1.jpg` cover, `terminal_opacity: 0.3`, `radius: 10`, `gap: 8`, titlebar propia, sidebar de 268px |
-| Mod | `mods/roldy-spaces/` (486 líneas) | Sidebar de spaces: avatares de color estable, worktrees anidados bajo su checkout, agrupados por máquina, repo/rama viva + ahead/behind |
+| Mod | `mods/roldy-tabs/` | Barra de tabs: igual que el original, X en **cada** tab (no solo activa) |
 | Mod | `mods/always-notify/` (83 líneas) | Sonido + toast en **cada** transición del agente, aun mirando la app (el built-in solo avisa cuando no miras) |
 | Fondos | `backgrounds/` | `mountain_1.jpg` (en uso) + `imagen-back-2.jpg` (alternativo). Herdr necesita PNG/JPG, no AVIF |
 
@@ -100,8 +100,7 @@ Restaurar (resumen, Windows pwsh):
 ```powershell
 Copy-Item .\herdr-desktop\layouts\roldy-theme.json $env:USERPROFILE\.config\herdr-app\layouts\roldy-theme.json -Force
 Copy-Item .\herdr-desktop\backgrounds\* $env:USERPROFILE\.config\herdr-app\backgrounds\ -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\main.js $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\main.js -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\mod.json $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\mod.json -Force
+Copy-Item .\herdr-desktop\mods\roldy-tabs\* $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs\ -Force
 Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\herdr-app\mods\always-notify\main.js -Force
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
 herdr-app do layout.switch --name "roldy-theme"
