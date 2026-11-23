@@ -1,17 +1,17 @@
-// water-reminder: te avisa cada cierto tiempo para tomar agua.
-// Solo corre con Herdr abierto (los mods viven en la ventana).
-// Liviano: un timer cada 60s revisa si ya toca; sin red, sin exec.
-// Respeta el mute global (settings.sounds.enabled) para el sonido; el toast igual sale.
+// water-reminder: reminds you to drink water every so often.
+// Only runs with Herdr open (mods live in the window).
+// Lightweight: a 60s timer checks whether it's time; no network, no exec.
+// Respects the global mute (settings.sounds.enabled) for sound; the toast still shows.
 //
-// Diseño del aviso: gota azul propia (drop.svg) en vez del punto genérico,
-// título fijo + mensaje rotativo con racha (vaso n.º), 60s en pantalla.
-// Clic en el aviso = posponer 10 min (vía comando water-reminder.snooze).
-// Comando water-reminder.preview = mostrar un aviso sin mover el timer.
+// Toast design: custom blue droplet (drop.svg) instead of the generic dot,
+// fixed title + rotating message, 60s on screen, own sound (sounds/cute-water.mp3).
+// Clicking the toast = snooze 10 min (via water-reminder.snooze command).
+// water-reminder.preview command = show one without moving the timer.
 
 import { View, div } from "gpui-kit";
 import { notify, playSound, checking, shared, setShared, settings, nextCommand } from "herdr";
 
-// Cada cuánto avisar. Cambia este número y guarda: hot-reload aplica al instante.
+// How often to remind. Change this number and save: hot-reload applies instantly.
 const MINUTES = 16;
 const INTERVAL = MINUTES * 60 * 1000;
 const TICK = 60 * 1000;
@@ -28,18 +28,18 @@ const MESSAGES = [
 export default class WaterReminder extends View {
   init(_props, cx) {
     if (checking()) return;
-    // Primera vez: programa el primer aviso.
+    // First run: schedule the first reminder.
     if (!shared("water-reminder.next")) {
       setShared("water-reminder.next", Date.now() + INTERVAL);
     }
     setShared("water-reminder.alive", Date.now());
-    // Re-evalúa cada minuto por si ningún render lo disparó.
+    // Re-evaluates every minute in case no render triggered it.
     cx.timer.every(TICK, (cx) => {
       setShared("water-reminder.alive", Date.now());
       this.maybe();
       cx.notify();
     });
-    // Comandos del mod: clic en el aviso = snooze, preview = ver diseño sin mover el timer.
+    // Mod commands: toast click = snooze, preview = show design without moving the timer.
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
@@ -70,7 +70,7 @@ export default class WaterReminder extends View {
     if (!preview && this.soundsOn()) playSound(SOUND);
     notify({
       title: "Toca hidratarse",
-      body: `${body}`,
+      body,
       level: "info",
       icon: ICON,
       timeout: 60000,

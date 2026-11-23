@@ -1,8 +1,8 @@
-// always-notify: suena y avisa SIEMPRE que un agente termina o te necesita,
-// incluso cuando estás mirando la app (Herdr solo avisa cuando no miras).
-// Vigila agents() en cada render (Herdr re-renderiza al cambiar de estado)
-// y dispara playSound + notify en transiciones a blocked/done,
-// más working -> idle (terminó mientras mirabas: Herdr lo pone idle directo).
+// always-notify: sound + toast on EVERY agent transition, even while
+// watching the app (Herdr only notifies when you look away).
+// Watches agents() on every render (Herdr re-renders on state change)
+// and fires playSound + notify on blocked/done transitions,
+// plus working -> idle (finished while watched: Herdr flips it to idle).
 
 import { View, div } from "gpui-kit";
 import { agents, notify, playSound, checking, setShared, settings } from "herdr";
@@ -13,10 +13,10 @@ const where = (a) => [a.space_name, a.tab_name].filter(Boolean).join(" · ");
 export default class AlwaysNotify extends View {
   init(_props, cx) {
     this.last = {};
-    // Heartbeat: demuestra que el mod llegó a instanciarse (visible en shared.json).
+    // Heartbeat: proves the mod got instantiated (visible in shared.json).
     if (!checking()) {
       setShared("always-notify.alive", Date.now());
-      // Re-evalúa cada 2s por si un cambio de estado no disparó render.
+      // Re-evaluates every 2s in case a state change didn't trigger a render.
       cx.timer.every(2000, (cx) => {
         setShared("always-notify.alive", Date.now());
         cx.notify();
@@ -63,17 +63,17 @@ export default class AlwaysNotify extends View {
       seen.add(a.address);
       const prev = this.last[a.address];
       this.last[a.address] = a.status;
-      if (prev === undefined) continue; // primera vez visto (p. ej. al abrir la app): registrar sin ruido
+      if (prev === undefined) continue; // first time seen (e.g. on app start): register silently
       if (checking()) continue; // `herdr-app check`: nunca efectos
       if (a.status === "blocked" && prev !== "blocked") {
         this.announce(a, "blocked");
       } else if (a.status === "done" && prev !== "done") {
         this.announce(a, "done");
       } else if (a.status === "idle" && prev === "working") {
-        // Terminó mientras lo mirabas: Herdr no avisa por sí mismo.
+        // Finished while you were watching: Herdr doesn't notify by itself.
         this.announce(a, "done");
       }
-      // done -> idle es solo "miraste el toast": silencio a propósito.
+      // done -> idle is just "you saw the toast": silence on purpose.
     }
     for (const k of Object.keys(this.last)) {
       if (!seen.has(k)) delete this.last[k];
