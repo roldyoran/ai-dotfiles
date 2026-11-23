@@ -14,8 +14,9 @@ herdr-desktop/
   README.md                     # Este archivo en inglés — ver README.es.md para español
   README.es.md                  # Este archivo
   layouts/roldy-theme.json      # layout activo (clon de main, v0.1.15)
-  mods/roldy-spaces/main.js     # sidebar de spaces (clon del spaces original)
-  mods/roldy-spaces/mod.json
+  mods/roldy-tabs/main.js         # barra de tabs (clon de tabs, X siempre visible)
+  mods/roldy-tabs/mod.json
+  mods/roldy-tabs/win-*.svg       # botones de ventana (del clon)
   mods/always-notify/main.js    # sonido + toast en CADA transición del agente
   mods/always-notify/mod.json
   backgrounds/mountain_1.jpg    # fondo EN USO (cover)
@@ -62,12 +63,11 @@ Sidebar colapsado (<160px): los mods dibujan rail compacto (letra inicial + punt
 
 ## Mods
 
-### `roldy-spaces` (486 líneas, `place: none`, clon del `spaces` original)
+### `roldy-tabs` (`place: none`, clon del `tabs` original)
 
-Sidebar de spaces. Avatares de color estable, worktrees anidados bajo su checkout,
-agrupados por máquina. Tras el nombre muestra repo/rama viva + ahead/behind solo
-cuando es raro. Clic cambia, clic derecho abre el menú del space, arrastrar reordena.
-El estado del agente vive en la lista `agents`, no aquí.
+Barra de tabs. Igual que el original, salvo que la X de cerrar sale en **todas**
+las tabs, no solo en la activa. La X inactiva va atenuada, hover la resalta.
+Clic en X cierra con `tab.close { id }` (stopPropagation para no seleccionar antes).
 
 ### `always-notify` (83 líneas, `place: none`)
 
@@ -134,13 +134,12 @@ Detalles:
 Copy-Item .\herdr-desktop\layouts\roldy-theme.json $env:USERPROFILE\.config\herdr-app\layouts\roldy-theme.json -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\backgrounds | Out-Null
 Copy-Item .\herdr-desktop\backgrounds\* $env:USERPROFILE\.config\herdr-app\backgrounds\ -Force
-New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces | Out-Null
-Copy-Item .\herdr-desktop\mods\roldy-spaces\main.js $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\main.js -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\mod.json $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\mod.json -Force
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs | Out-Null
+Copy-Item .\herdr-desktop\mods\roldy-tabs\* $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs\ -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\always-notify | Out-Null
 Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\herdr-app\mods\always-notify\main.js -Force
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
-herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces
+herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\always-notify
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
@@ -150,11 +149,11 @@ Unix (mismas rutas bajo `~/.config/herdr-app`):
 
 ```sh
 cp herdr-desktop/layouts/roldy-theme.json ~/.config/herdr-app/layouts/roldy-theme.json
-mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-spaces ~/.config/herdr-app/mods/always-notify
+mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify
 cp herdr-desktop/backgrounds/* ~/.config/herdr-app/backgrounds/
-cp herdr-desktop/mods/roldy-spaces/main.js herdr-desktop/mods/roldy-spaces/mod.json ~/.config/herdr-app/mods/roldy-spaces/
+cp herdr-desktop/mods/roldy-tabs/* ~/.config/herdr-app/mods/roldy-tabs/
 cp herdr-desktop/mods/always-notify/main.js herdr-desktop/mods/always-notify/mod.json ~/.config/herdr-app/mods/always-notify/
-herdr-app check ~/.config/herdr-app/mods/roldy-spaces
+herdr-app check ~/.config/herdr-app/mods/roldy-tabs
 herdr-app check ~/.config/herdr-app/mods/always-notify
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
@@ -163,8 +162,8 @@ herdr-app status
 ## Aplicar y verificar
 
 ```sh
+herdr-app check ~/.config/herdr-app/mods/roldy-tabs       # debe pasar; X en cada tab
 herdr-app check ~/.config/herdr-app/mods/always-notify   # debe pasar; sin efectos (checking())
-herdr-app check ~/.config/herdr-app/mods/roldy-spaces
 herdr-app status        # layout roldy-theme, sin errores, overlays []
 herdr-app ls            # spaces > tabs > terminales
 herdr-app shot /tmp/herdr.png   # chequeo visual (sirve tapado/minimizado)
