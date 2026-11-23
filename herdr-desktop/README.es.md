@@ -19,7 +19,7 @@ herdr-desktop/
   mods/roldy-tabs/win-*.svg       # botones de ventana (del clon)
   mods/always-notify/main.js    # sonido + toast en CADA transición del agente
   mods/always-notify/mod.json
-  mods/water-reminder/main.js + drop.svg  # recordatorio de agua cada 16 min (timer + toast)
+  mods/water-reminder/main.js + drop.svg + sounds/  # recordatorio de agua cada 16 min (timer + toast)
   mods/water-reminder/mod.json
   backgrounds/mountain_1.jpg    # fondo EN USO (cover)
   backgrounds/imagen-back-2.jpg # fondo alternativo
@@ -79,7 +79,7 @@ Suena + toast en **cada** transición del agente, aun mirando la app.
 
 Recordatorio de agua cada 16 min (cambia `MINUTES` arriba de `main.js`).
 Timer revisa cada 60s, publica un toast con gota azul propia (`drop.svg`),
-mensaje rotativo, 60s en pantalla, más `playSound("done")`
+mensaje rotativo, 60s en pantalla, más su propio sonido (`sounds/cute-water.mp3`)
 y reprograma. Clic en el aviso = posponer 10 min
 (`water-reminder.snooze` vía `nextCommand`); `water-reminder.preview` muestra uno
 sin mover el timer. Respeta mute global para el sonido (el

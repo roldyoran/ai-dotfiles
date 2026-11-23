@@ -16,6 +16,7 @@ const MINUTES = 16;
 const INTERVAL = MINUTES * 60 * 1000;
 const TICK = 60 * 1000;
 const ICON = "mods/water-reminder/drop.svg";
+const SOUND = "mods/water-reminder/sounds/cute-water.mp3";
 
 const MESSAGES = [
   "Toma agua y estírate un poco.",
@@ -66,7 +67,7 @@ export default class WaterReminder extends View {
     if (checking()) return;
     const count = (shared("water-reminder.count") ?? 0) + (preview ? 0 : 1);
     const body = MESSAGES[count % MESSAGES.length];
-    if (!preview && this.soundsOn()) playSound("done");
+    if (!preview && this.soundsOn()) playSound(SOUND);
     notify({
       title: "Toca hidratarse",
       body: `${body}`,
