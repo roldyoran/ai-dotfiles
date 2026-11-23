@@ -29,6 +29,7 @@ ai-dotfiles/
 │   ├── layouts/roldy-theme.json        # layout activo (clon de main, v0.1.15)
 │   ├── mods/roldy-tabs/                 # barra de tabs (clon de tabs, X siempre visible)
 │   ├── mods/always-notify/             # sonido + toast en CADA transición del agente
+│   ├── mods/water-reminder/            # recordatorio de agua cada 16 min
 │   └── backgrounds/                    # mountain_1.jpg (en uso) + imagen-back-2.jpg
 ├── claude/                # (futuro)
 ├── codex/                 # (futuro)
@@ -86,13 +87,14 @@ pi                  # arranca con tu sistema cargado
 
 Backup del setup personalizado de Herdr Desktop. La app viva lee desde `~/.config/herdr-app`, así que restaurar es copiar estos archivos ahí y recargar en caliente. Pasos completos en `herdr-desktop/README.es.md`.
 
-**Respaldado:** layout + 2 mods propios + fondos en uso. **No respaldado** (local de la máquina): `settings.json`, `keys.json`, layouts/mods originales (nunca editarlos en su lugar — clonar primero), `view.json` / `shared.json` / `data/` / `layouts/.state/`.
+**Respaldado:** layout + 3 mods propios + fondos en uso. **No respaldado** (local de la máquina): `settings.json`, `keys.json`, layouts/mods originales (nunca editarlos en su lugar — clonar primero), `view.json` / `shared.json` / `data/` / `layouts/.state/`.
 
 | Pieza | Archivo | Resumen |
 |-------|---------|---------|
 | Layout | `layouts/roldy-theme.json` | Clon de `main`. Acento `#f59e0b`, neutral-950 `#0a0a0a`, superficies al 80% de opacidad (menús 100% opacos), `mountain_1.jpg` cover, `terminal_opacity: 0.3`, `radius: 10`, `gap: 8`, titlebar propia, sidebar de 268px |
 | Mod | `mods/roldy-tabs/` | Barra de tabs: igual que el original, X en **cada** tab (no solo activa) |
 | Mod | `mods/always-notify/` (83 líneas) | Sonido + toast en **cada** transición del agente, aun mirando la app (el built-in solo avisa cuando no miras) |
+| Mod | `mods/water-reminder/` | Recordatorio de agua cada 16 min (`MINUTES` arriba), toast + sonido, solo con Herdr abierto |
 | Fondos | `backgrounds/` | `mountain_1.jpg` (en uso) + `imagen-back-2.jpg` (alternativo). Herdr necesita PNG/JPG, no AVIF |
 
 Restaurar (resumen, Windows pwsh):
