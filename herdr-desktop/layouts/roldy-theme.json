@@ -29,7 +29,7 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "roldy-spaces"
+                "mod": "spaces"
               },
               "size": {
                 "weight": 1
@@ -53,6 +53,14 @@
               "size": { "px": 2 },
               "content": {
                 "mod": "always-notify"
+              }
+            },
+            {
+              "id": "water-reminder",
+              "type": "block",
+              "size": { "px": 2 },
+              "content": {
+                "mod": "water-reminder"
               }
             }
           ]
@@ -87,7 +95,7 @@
           "id": "tabs",
           "type": "block",
           "content": {
-            "mod": "tabs"
+            "mod": "roldy-tabs"
           },
           "size": {
             "px": 42

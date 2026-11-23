@@ -27,8 +27,9 @@ ai-dotfiles/
 ├── herdr-desktop/         # Backup mirror of ~/.config/herdr-app (roldy-theme)
 │   ├── README.md / README.es.md
 │   ├── layouts/roldy-theme.json        # active layout (clone of main, v0.1.15)
-│   ├── mods/roldy-spaces/              # spaces sidebar (clone of shipped spaces)
+│   ├── mods/roldy-tabs/                 # tabs bar (clone of shipped tabs, X always visible)
 │   ├── mods/always-notify/             # sound + toast on EVERY agent transition
+│   ├── mods/water-reminder/            # drink-water reminder every 16 min
 │   └── backgrounds/                    # mountain_1.jpg (in use) + imagen-back-2.jpg
 ├── claude/                # (future)
 ├── codex/                 # (future)
@@ -86,13 +87,14 @@ pi                  # starts with your system loaded
 
 Backup of the custom Herdr Desktop setup. The live app reads from `~/.config/herdr-app`, so restoring means copying these files there and hot-reloading. Full steps live in `herdr-desktop/README.md`.
 
-**Backed up:** layout + 2 custom mods + backgrounds in use. **Not backed up** (machine-local): `settings.json`, `keys.json`, shipped layouts/mods (never edit in place — clone first), `view.json` / `shared.json` / `data/` / `layouts/.state/`.
+**Backed up:** layout + 3 custom mods + backgrounds in use. **Not backed up** (machine-local): `settings.json`, `keys.json`, shipped layouts/mods (never edit in place — clone first), `view.json` / `shared.json` / `data/` / `layouts/.state/`.
 
 | Piece | File | Summary |
 |-------|------|---------|
 | Layout | `layouts/roldy-theme.json` | Clone of `main`. Accent `#f59e0b`, neutral-950 `#0a0a0a`, surfaces at 80% opacity (menus 100% opaque), `mountain_1.jpg` cover, `terminal_opacity: 0.3`, `radius: 10`, `gap: 8`, custom titlebar, 268px sidebar |
-| Mod | `mods/roldy-spaces/` (486 lines) | Spaces sidebar: stable colored avatars, worktrees nested under checkout, grouped by machine, live repo/branch + ahead/behind |
+| Mod | `mods/roldy-tabs/` | Tabs bar: same as shipped, close X on **every** tab (not only active) |
 | Mod | `mods/always-notify/` (83 lines) | Sound + toast on **every** agent transition, even while watching (built-in only notifies when away) |
+| Mod | `mods/water-reminder/` | Drink-water reminder every 16 min (`MINUTES` on top), toast + sound, only while Herdr is open |
 | Backgrounds | `backgrounds/` | `mountain_1.jpg` (in use) + `imagen-back-2.jpg` (alternate). Herdr needs PNG/JPG, not AVIF |
 
 Restore sketch (Windows pwsh):
@@ -100,8 +102,7 @@ Restore sketch (Windows pwsh):
 ```powershell
 Copy-Item .\herdr-desktop\layouts\roldy-theme.json $env:USERPROFILE\.config\herdr-app\layouts\roldy-theme.json -Force
 Copy-Item .\herdr-desktop\backgrounds\* $env:USERPROFILE\.config\herdr-app\backgrounds\ -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\main.js $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\main.js -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\mod.json $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\mod.json -Force
+Copy-Item .\herdr-desktop\mods\roldy-tabs\* $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs\ -Force
 Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\herdr-app\mods\always-notify\main.js -Force
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
 herdr-app do layout.switch --name "roldy-theme"

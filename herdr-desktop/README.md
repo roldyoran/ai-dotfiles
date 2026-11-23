@@ -14,15 +14,18 @@ herdr-desktop/
   README.md                     # This file (EN) — see README.es.md for Spanish
   README.es.md                  # Spanish version
   layouts/roldy-theme.json      # active layout (clone of main, v0.1.15)
-  mods/roldy-spaces/main.js     # spaces sidebar (clone of shipped spaces)
-  mods/roldy-spaces/mod.json
+  mods/roldy-tabs/main.js         # tabs bar (clone of shipped tabs, X always visible)
+  mods/roldy-tabs/mod.json
+  mods/roldy-tabs/win-*.svg       # window buttons (from clone)
   mods/always-notify/main.js    # sound + toast on EVERY agent transition
   mods/always-notify/mod.json
+  mods/water-reminder/main.js + drop.svg + sounds/  # drink-water reminder every 16 min (timer + toast)
+  mods/water-reminder/mod.json
   backgrounds/mountain_1.jpg    # background IN USE (cover)
   backgrounds/imagen-back-2.jpg # alternate background
 ```
 
-Backed up: only the custom theme (layout + 2 custom mods + backgrounds in use).
+Backed up: only the custom theme (layout + 3 custom mods + backgrounds in use).
 Not backed up (machine-local, edited in the app):
 
 - `settings.json` — zoom, sounds, fonts, appearance, telemetry (see Sounds & settings)
@@ -62,16 +65,27 @@ Collapsed sidebar (<160px): mods draw a compact rail (initial letter + status do
 
 ## Mods
 
-### `roldy-spaces` (486 lines, `place: none`, cloned from shipped `spaces`)
+### `roldy-tabs` (`place: none`, cloned from shipped `tabs`)
 
-Spaces sidebar. Stable colored avatars, worktrees nested under their checkout,
-grouped by machine. After the name it shows the live repo/branch + ahead/behind
-only when unusual. Click switches, right-click opens the space menu, drag reorders.
-Agent state lives in the `agents` list, not here.
+Tabs bar. Same as shipped, except the close X shows on **every** tab, not only
+the active one. Inactive X is muted, hover highlights. Click X closes via
+`tab.close { id }` (stopPropagation so it never selects first).
 
 ### `always-notify` (83 lines, `place: none`)
 
 Sounds + toast on **every** agent transition, even while looking at the app.
+
+### `water-reminder` (`place: none`)
+
+Drink-water reminder every 16 min (change `MINUTES` on top of `main.js`).
+Timer checks every 60s, posts a toast with a custom droplet icon (`drop.svg`),
+rotating message, 60s timeout, plus its own sound (`sounds/cute-water.mp3`),
+then reschedules. Clicking the toast snoozes 10 min
+(`water-reminder.snooze` via `nextCommand`); `water-reminder.preview` shows one
+without touching the timer. Respects global mute for sound (toast
+still shows). Only runs with Herdr open — closing the window pauses it.
+State in `shared.json`: `water-reminder.next/alive/last/count`.
+Layout block is `size: { px: 2 }`, not `hidden` (same reason as always-notify).
 Herdr built-in only plays `blocked`/`done` sounds (and posts the toast) when you
 are **not** looking; when you watch it flips `done → idle` silently.
 
@@ -134,13 +148,14 @@ Live `~/.config/herdr-app/settings.json` (machine-local):
 Copy-Item .\herdr-desktop\layouts\roldy-theme.json $env:USERPROFILE\.config\herdr-app\layouts\roldy-theme.json -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\backgrounds | Out-Null
 Copy-Item .\herdr-desktop\backgrounds\* $env:USERPROFILE\.config\herdr-app\backgrounds\ -Force
-New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces | Out-Null
-Copy-Item .\herdr-desktop\mods\roldy-spaces\main.js $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\main.js -Force
-Copy-Item .\herdr-desktop\mods\roldy-spaces\mod.json $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces\mod.json -Force
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs | Out-Null
+Copy-Item .\herdr-desktop\mods\roldy-tabs\* $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs\ -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\always-notify | Out-Null
 Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\herdr-app\mods\always-notify\main.js -Force
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
-herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-spaces
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\water-reminder | Out-Null
+Copy-Item .\herdr-desktop\mods\water-reminder\* $env:USERPROFILE\.config\herdr-app\mods\water-reminder\ -Force
+herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\always-notify
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
@@ -150,11 +165,13 @@ Unix (same paths under `~/.config/herdr-app`):
 
 ```sh
 cp herdr-desktop/layouts/roldy-theme.json ~/.config/herdr-app/layouts/roldy-theme.json
-mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-spaces ~/.config/herdr-app/mods/always-notify
+mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder
 cp herdr-desktop/backgrounds/* ~/.config/herdr-app/backgrounds/
-cp herdr-desktop/mods/roldy-spaces/main.js herdr-desktop/mods/roldy-spaces/mod.json ~/.config/herdr-app/mods/roldy-spaces/
+cp herdr-desktop/mods/roldy-tabs/* ~/.config/herdr-app/mods/roldy-tabs/
 cp herdr-desktop/mods/always-notify/main.js herdr-desktop/mods/always-notify/mod.json ~/.config/herdr-app/mods/always-notify/
-herdr-app check ~/.config/herdr-app/mods/roldy-spaces
+cp herdr-desktop/mods/water-reminder/* ~/.config/herdr-app/mods/water-reminder/
+herdr-app check ~/.config/herdr-app/mods/roldy-tabs
+herdr-app check ~/.config/herdr-app/mods/water-reminder
 herdr-app check ~/.config/herdr-app/mods/always-notify
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
@@ -163,8 +180,9 @@ herdr-app status
 ## Apply & verify
 
 ```sh
+herdr-app check ~/.config/herdr-app/mods/water-reminder    # must pass; timer only, no side effects
+herdr-app check ~/.config/herdr-app/mods/roldy-tabs       # must pass; X on every tab
 herdr-app check ~/.config/herdr-app/mods/always-notify   # must pass; no side effects (checking())
-herdr-app check ~/.config/herdr-app/mods/roldy-spaces
 herdr-app status        # layout roldy-theme, no errors, overlays []
 herdr-app ls            # spaces > tabs > terminals
 herdr-app shot /tmp/herdr.png   # visual check (works covered/minimized)
@@ -174,6 +192,8 @@ herdr-app shot /tmp/herdr.png   # visual check (works covered/minimized)
   and reports in `status` + `<name>.error`
 - confirm `always-notify` runs: `shared.json` must contain `always-notify.alive`
   (heartbeat every 2s) — if missing, its layout block isn't instantiated
+- confirm `water-reminder` runs: `shared.json` must contain `water-reminder.alive`
+  (heartbeat every 60s) and `water-reminder.next` — if missing, its layout block isn't instantiated
 - test sound: keep the agent tab visible, let another agent finish / need you →
   expect sound + toast even while watching; click toast → `agent.focus`
 - test preview anytime: Settings → Alerts → `Play` (calls `playSound` directly)
