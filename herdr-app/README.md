@@ -21,11 +21,13 @@ herdr-desktop/
   mods/always-notify/mod.json
   mods/water-reminder/main.js + drop.svg + sounds/  # drink-water reminder every 16 min (timer + toast)
   mods/water-reminder/mod.json
+  mods/posture-reminder/main.js + shrimp.svg + sounds/  # posture reminder every 30 min (timer + toast)
+  mods/posture-reminder/mod.json
   backgrounds/mountain_1.jpg    # background IN USE (cover)
   backgrounds/imagen-back-2.jpg # alternate background
 ```
 
-Backed up: only the custom theme (layout + 3 custom mods + backgrounds in use).
+Backed up: only the custom theme (layout + 4 custom mods + backgrounds in use).
 Not backed up (machine-local, edited in the app):
 
 - `settings.json` — zoom, sounds, fonts, appearance, telemetry (see Sounds & settings)
@@ -46,7 +48,8 @@ Clone of `main`. Root is a `row`:
 
 - `sidebar` (column, 268px, `chrome`, not resizable): `brand` (46px,
   `workspace-chrome`) → `sidebar-lists` (column: `spaces` weight 1 +
-  `agents` weight 1 + `always-notify` 2px) → `sidebar-footer` (69px)
+  `agents` weight 1 + `always-notify` 2px + `water-reminder` 2px +
+  `posture-reminder` 2px) → `sidebar-footer` (69px)
 - `work` (column): `tabs` bar (42px, `window_drag`) → `work-body` (row:
   `main` tab block + `panel` stack `files`/`changes`, hidden) → `status` (28px)
 - `titlebar: none` (custom bar), `traffic_lights: [12, 16]` for macOS
@@ -110,6 +113,19 @@ Details:
 - layout block is `size: { px: 2 }`, **not** `hidden: true` — a hidden block
   never instantiates (proven: no `shared.json` key until it was made visible)
 
+### `posture-reminder` (`place: none`)
+
+Posture reminder every 30 min (change `MINUTES` on top of `main.js`).
+Same pattern as `water-reminder`: timer checks every 60s, posts a toast with
+a custom shrimp icon (`shrimp.svg`, anti modo-gamba 🍤), rotating general
+advice, 12s timeout, plus its own sound (`sounds/posture.mp3`),
+then reschedules. Clicking the toast snoozes 10 min
+(`posture-reminder.snooze` via `nextCommand`); `posture-reminder.preview` shows one
+without touching the timer. Respects global mute for sound (toast
+still shows). Only runs with Herdr open — closing the window pauses it.
+State in `shared.json`: `posture-reminder.next/alive/last/count`.
+Layout block is `size: { px: 2 }`, not `hidden` (same reason as always-notify).
+
 ## Backgrounds
 
 - in use: `backgrounds/mountain_1.jpg` (`fit: cover`)
@@ -155,8 +171,11 @@ Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\he
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\water-reminder | Out-Null
 Copy-Item .\herdr-desktop\mods\water-reminder\* $env:USERPROFILE\.config\herdr-app\mods\water-reminder\ -Force
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\posture-reminder | Out-Null
+Copy-Item .\herdr-desktop\mods\posture-reminder\* $env:USERPROFILE\.config\herdr-app\mods\posture-reminder\ -Force
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\always-notify
+herdr-app check $env:USERPROFILE\.config\herdr-app\mods\posture-reminder
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
 ```
@@ -165,14 +184,17 @@ Unix (same paths under `~/.config/herdr-app`):
 
 ```sh
 cp herdr-desktop/layouts/roldy-theme.json ~/.config/herdr-app/layouts/roldy-theme.json
-mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder
+mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder ~/.config/herdr-app/mods/posture-reminder
 cp herdr-desktop/backgrounds/* ~/.config/herdr-app/backgrounds/
 cp herdr-desktop/mods/roldy-tabs/* ~/.config/herdr-app/mods/roldy-tabs/
 cp herdr-desktop/mods/always-notify/main.js herdr-desktop/mods/always-notify/mod.json ~/.config/herdr-app/mods/always-notify/
 cp herdr-desktop/mods/water-reminder/* ~/.config/herdr-app/mods/water-reminder/
+cp herdr-desktop/mods/posture-reminder/main.js herdr-desktop/mods/posture-reminder/mod.json herdr-desktop/mods/posture-reminder/shrimp.svg ~/.config/herdr-app/mods/posture-reminder/
+cp herdr-desktop/mods/posture-reminder/sounds/* ~/.config/herdr-app/mods/posture-reminder/sounds/
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs
 herdr-app check ~/.config/herdr-app/mods/water-reminder
 herdr-app check ~/.config/herdr-app/mods/always-notify
+herdr-app check ~/.config/herdr-app/mods/posture-reminder
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
 ```
@@ -183,6 +205,7 @@ herdr-app status
 herdr-app check ~/.config/herdr-app/mods/water-reminder    # must pass; timer only, no side effects
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs       # must pass; X on every tab
 herdr-app check ~/.config/herdr-app/mods/always-notify   # must pass; no side effects (checking())
+herdr-app check ~/.config/herdr-app/mods/posture-reminder # must pass; timer only, no side effects
 herdr-app status        # layout roldy-theme, no errors, overlays []
 herdr-app ls            # spaces > tabs > terminals
 herdr-app shot /tmp/herdr.png   # visual check (works covered/minimized)
@@ -194,6 +217,8 @@ herdr-app shot /tmp/herdr.png   # visual check (works covered/minimized)
   (heartbeat every 2s) — if missing, its layout block isn't instantiated
 - confirm `water-reminder` runs: `shared.json` must contain `water-reminder.alive`
   (heartbeat every 60s) and `water-reminder.next` — if missing, its layout block isn't instantiated
+- confirm `posture-reminder` runs: `shared.json` must contain `posture-reminder.alive`
+  (heartbeat every 60s) and `posture-reminder.next` — if missing, its layout block isn't instantiated
 - test sound: keep the agent tab visible, let another agent finish / need you →
   expect sound + toast even while watching; click toast → `agent.focus`
 - test preview anytime: Settings → Alerts → `Play` (calls `playSound` directly)
