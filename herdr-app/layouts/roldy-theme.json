@@ -62,6 +62,14 @@
               "content": {
                 "mod": "water-reminder"
               }
+            },
+            {
+              "id": "posture-reminder",
+              "type": "block",
+              "size": { "px": 2 },
+              "content": {
+                "mod": "posture-reminder"
+              }
             }
           ]
         },

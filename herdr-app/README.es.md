@@ -21,11 +21,13 @@ herdr-desktop/
   mods/always-notify/mod.json
   mods/water-reminder/main.js + drop.svg + sounds/  # recordatorio de agua cada 16 min (timer + toast)
   mods/water-reminder/mod.json
+  mods/posture-reminder/main.js + shrimp.svg + sounds/  # recordatorio de postura cada 30 min (timer + toast)
+  mods/posture-reminder/mod.json
   backgrounds/mountain_1.jpg    # fondo EN USO (cover)
   backgrounds/imagen-back-2.jpg # fondo alternativo
 ```
 
-Respaldado: solo el tema custom (layout + 3 mods + fondos en uso).
+Respaldado: solo el tema custom (layout + 4 mods + fondos en uso).
 No respaldado (local de la máquina, se edita en la app):
 
 - `settings.json` — zoom, sonidos, fuentes, apariencia, telemetría (ver Sonidos y ajustes)
@@ -46,7 +48,8 @@ Clon de `main`. Raíz tipo `row`:
 
 - `sidebar` (columna, 268px, `chrome`, no redimensionable): `brand` (46px,
   `workspace-chrome`) → `sidebar-lists` (columna: `spaces` peso 1 +
-  `agents` peso 1 + `always-notify` 2px) → `sidebar-footer` (69px)
+  `agents` peso 1 + `always-notify` 2px + `water-reminder` 2px +
+  `posture-reminder` 2px) → `sidebar-footer` (69px)
 - `work` (columna): barra `tabs` (42px, `window_drag`) → `work-body` (fila:
   bloque tab `main` + `panel` stack `files`/`changes`, oculto) → `status` (28px)
 - `titlebar: none` (barra custom), `traffic_lights: [12, 16]` para macOS
@@ -110,6 +113,19 @@ Detalles:
 - el bloque en layout es `size: { px: 2 }`, **no** `hidden: true` — un bloque oculto
   nunca se instancia (probado: sin key en `shared.json` hasta hacerlo visible)
 
+### `posture-reminder` (`place: none`)
+
+Recordatorio de postura cada 30 min (cambia `MINUTES` arriba de `main.js`).
+Mismo patrón que `water-reminder`: timer revisa cada 60s, publica un toast con
+icono de camarón propio (`shrimp.svg`, anti modo-gamba 🍤), consejo general
+rotativo, 12s en pantalla, más su propio sonido (`sounds/posture.mp3`)
+y reprograma. Clic en el aviso = posponer 10 min
+(`posture-reminder.snooze` vía `nextCommand`); `posture-reminder.preview` muestra uno
+sin mover el timer. Respeta mute global para el sonido (el
+toast igual sale). Solo corre con Herdr abierto — cerrar la ventana lo pausa.
+Estado en `shared.json`: `posture-reminder.next/alive/last/count`.
+Bloque en layout `size: { px: 2 }`, no `hidden` (igual que always-notify).
+
 ## Fondos
 
 - en uso: `backgrounds/mountain_1.jpg` (`fit: cover`)
@@ -155,8 +171,11 @@ Copy-Item .\herdr-desktop\mods\always-notify\main.js $env:USERPROFILE\.config\he
 Copy-Item .\herdr-desktop\mods\always-notify\mod.json $env:USERPROFILE\.config\herdr-app\mods\always-notify\mod.json -Force
 New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\water-reminder | Out-Null
 Copy-Item .\herdr-desktop\mods\water-reminder\* $env:USERPROFILE\.config\herdr-app\mods\water-reminder\ -Force
+New-Item -ItemType Directory -Force $env:USERPROFILE\.config\herdr-app\mods\posture-reminder | Out-Null
+Copy-Item .\herdr-desktop\mods\posture-reminder\* $env:USERPROFILE\.config\herdr-app\mods\posture-reminder\ -Force
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\roldy-tabs
 herdr-app check $env:USERPROFILE\.config\herdr-app\mods\always-notify
+herdr-app check $env:USERPROFILE\.config\herdr-app\mods\posture-reminder
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
 ```
@@ -165,14 +184,17 @@ Unix (mismas rutas bajo `~/.config/herdr-app`):
 
 ```sh
 cp herdr-desktop/layouts/roldy-theme.json ~/.config/herdr-app/layouts/roldy-theme.json
-mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder
+mkdir -p ~/.config/herdr-app/backgrounds ~/.config/herdr-app/mods/roldy-tabs ~/.config/herdr-app/mods/always-notify ~/.config/herdr-app/mods/water-reminder ~/.config/herdr-app/mods/posture-reminder
 cp herdr-desktop/backgrounds/* ~/.config/herdr-app/backgrounds/
 cp herdr-desktop/mods/roldy-tabs/* ~/.config/herdr-app/mods/roldy-tabs/
 cp herdr-desktop/mods/always-notify/main.js herdr-desktop/mods/always-notify/mod.json ~/.config/herdr-app/mods/always-notify/
 cp herdr-desktop/mods/water-reminder/* ~/.config/herdr-app/mods/water-reminder/
+cp herdr-desktop/mods/posture-reminder/main.js herdr-desktop/mods/posture-reminder/mod.json herdr-desktop/mods/posture-reminder/shrimp.svg ~/.config/herdr-app/mods/posture-reminder/
+cp herdr-desktop/mods/posture-reminder/sounds/* ~/.config/herdr-app/mods/posture-reminder/sounds/
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs
 herdr-app check ~/.config/herdr-app/mods/water-reminder
 herdr-app check ~/.config/herdr-app/mods/always-notify
+herdr-app check ~/.config/herdr-app/mods/posture-reminder
 herdr-app do layout.switch --name "roldy-theme"
 herdr-app status
 ```
@@ -183,6 +205,7 @@ herdr-app status
 herdr-app check ~/.config/herdr-app/mods/water-reminder    # debe pasar; timer solo, sin efectos
 herdr-app check ~/.config/herdr-app/mods/roldy-tabs       # debe pasar; X en cada tab
 herdr-app check ~/.config/herdr-app/mods/always-notify   # debe pasar; sin efectos (checking())
+herdr-app check ~/.config/herdr-app/mods/posture-reminder # debe pasar; timer solo, sin efectos
 herdr-app status        # layout roldy-theme, sin errores, overlays []
 herdr-app ls            # spaces > tabs > terminales
 herdr-app shot /tmp/herdr.png   # chequeo visual (sirve tapado/minimizado)
@@ -192,6 +215,8 @@ herdr-app shot /tmp/herdr.png   # chequeo visual (sirve tapado/minimizado)
   y lo reporta en `status` + archivo `<name>.error`
 - confirma que `water-reminder` corre: `shared.json` debe tener `water-reminder.alive`
   (heartbeat cada 60s) y `water-reminder.next` — si falta, su bloque no está instanciado
+- confirma que `posture-reminder` corre: `shared.json` debe tener `posture-reminder.alive`
+  (heartbeat cada 60s) y `posture-reminder.next` — si falta, su bloque no está instanciado
 - confirma que `always-notify` corre: `shared.json` debe tener `always-notify.alive`
   (heartbeat cada 2s) — si falta, su bloque no está instanciado en el layout
 - prueba sonido: deja el tab del agente visible, deja que otro termine / te necesite →
