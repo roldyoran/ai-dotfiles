@@ -19,9 +19,9 @@ herdr-desktop/
   mods/roldy-tabs/win-*.svg       # window buttons (from clone)
   mods/always-notify/main.js    # sound + toast on EVERY agent transition
   mods/always-notify/mod.json
-  mods/water-reminder/main.js + drop.svg + sounds/  # drink-water reminder every 16 min (timer + toast)
+  mods/water-reminder/main.js + drop.svg + sounds/  # drink-water reminder every 32 min (timer + toast)
   mods/water-reminder/mod.json
-  mods/posture-reminder/main.js + shrimp.svg + sounds/  # posture reminder every 30 min (timer + toast)
+  mods/posture-reminder/main.js + shrimp.svg + sounds/  # posture reminder every 14 min (timer + toast)
   mods/posture-reminder/mod.json
   backgrounds/mountain_1.jpg    # background IN USE (cover)
   backgrounds/imagen-back-2.jpg # alternate background
@@ -80,7 +80,7 @@ Sounds + toast on **every** agent transition, even while looking at the app.
 
 ### `water-reminder` (`place: none`)
 
-Drink-water reminder every 16 min (change `MINUTES` on top of `main.js`).
+Drink-water reminder every 32 min (change `MINUTES` on top of `main.js`).
 Timer checks every 60s, posts a toast with a custom droplet icon (`drop.svg`),
 rotating message, 60s timeout, plus its own sound (`sounds/cute-water.mp3`),
 then reschedules. Clicking the toast snoozes 10 min
@@ -115,7 +115,7 @@ Details:
 
 ### `posture-reminder` (`place: none`)
 
-Posture reminder every 30 min (change `MINUTES` on top of `main.js`).
+Posture reminder every 14 min (change `MINUTES` on top of `main.js`).
 Same pattern as `water-reminder`: timer checks every 60s, posts a toast with
 a custom shrimp icon (`shrimp.svg`, anti modo-gamba 🍤), rotating general
 advice, 12s timeout, plus its own sound (`sounds/posture.mp3`),
