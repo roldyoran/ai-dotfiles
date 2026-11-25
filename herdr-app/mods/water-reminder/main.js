@@ -12,7 +12,7 @@ import { View, div } from "gpui-kit";
 import { notify, playSound, checking, shared, setShared, settings, nextCommand } from "herdr";
 
 // How often to remind. Change this number and save: hot-reload applies instantly.
-const MINUTES = 16;
+const MINUTES = 32;
 const INTERVAL = MINUTES * 60 * 1000;
 const TICK = 60 * 1000;
 const ICON = "mods/water-reminder/drop.svg";
